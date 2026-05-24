@@ -9,9 +9,7 @@
 
 use crate::config::Preset;
 use crate::control::ControlEvent;
-use crate::params::{
-    MapAction, MapMode, Mapping, ParamKind, ParamStore, ParamValue, SourceKey,
-};
+use crate::params::{MapAction, Mapping, ParamKind, ParamStore, ParamValue, SourceKey};
 
 /// Something the engine did that the outside world (chiefly the web UI) may want
 /// to hear about, so controllers and the on-screen state stay consistent.
@@ -212,7 +210,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::params::ParamSpec;
+    use crate::params::{MapMode, ParamSpec};
 
     fn engine_with_float() -> (Engine, &'static str) {
         let mut e = Engine::new();

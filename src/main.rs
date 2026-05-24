@@ -4,11 +4,13 @@
 //! entry point. The actual work lives in focused modules so each concern
 //! (rendering, audio, control, web) can evolve independently.
 
+mod app;
 mod cli;
 mod config;
 mod control;
 mod engine;
 mod params;
+mod render;
 mod version;
 
 use anyhow::Result;
@@ -48,17 +50,11 @@ fn main() -> Result<()> {
         }
     }
 
-    tracing::info!(
-        params = engine.params().len(),
-        "core engine ready (render loop wired up in a later milestone)"
-    );
+    tracing::info!(params = engine.params().len(), "core engine ready");
 
-    // Drain anything already queued (nothing yet, but proves the wiring links).
-    let _sender = bus.sender();
-    for ev in bus.drain() {
-        engine.handle(ev);
-    }
-    Ok(())
+    // Hand off to the selected output backend; it owns the frame loop and
+    // drains the control bus each frame.
+    app::run(args, engine, bus)
 }
 
 /// Register a small set of global parameters so the engine has a real surface to

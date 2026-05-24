@@ -30,6 +30,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 crossbeam-channel = "0.5"
 
+# Rendering: raw GL via glow so the same code targets GLES2 (Pi/CHIP) and
+# desktop GL 2.1 (macOS/Linux). winit + glutin provide the window and context.
+glow = "0.16"
+winit = "0.30"
+glutin = "0.32"
+glutin-winit = "0.5"
+raw-window-handle = "0.6"
+
 [build-dependencies]
 
 [profile.release]
