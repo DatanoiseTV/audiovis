@@ -50,7 +50,13 @@ impl ParamSpec {
 #[derive(Default)]
 pub struct ParamStore {
     specs: Vec<ParamSpec>,
+    /// Base values: what the user sets, what presets save.
     values: Vec<ParamValue>,
+    /// Effective float values after modulation (base + routed sources). The
+    /// renderer reads these via `get_f32`; non-float kinds mirror the base.
+    modulated: Vec<f32>,
+    /// Per-frame accumulated normalised modulation offset, applied in `commit`.
+    mod_offset: Vec<f32>,
     by_path: HashMap<String, usize>,
 }
 
@@ -68,7 +74,10 @@ impl ParamStore {
         }
         let idx = self.specs.len();
         self.by_path.insert(spec.path.clone(), idx);
-        self.values.push(spec.kind.default_value());
+        let default = spec.kind.default_value();
+        self.values.push(default);
+        self.modulated.push(default.as_f32());
+        self.mod_offset.push(0.0);
         self.specs.push(spec);
         ParamId(idx)
     }
@@ -81,29 +90,64 @@ impl ParamStore {
         &self.specs[id.0]
     }
 
+    /// Base value (what the UI shows and presets save).
     pub fn get(&self, id: ParamId) -> ParamValue {
         self.values[id.0]
     }
 
-    /// Fast float read for the render path.
+    /// Effective float read for the render path - includes modulation.
     pub fn get_f32(&self, id: ParamId) -> f32 {
-        self.values[id.0].as_f32()
+        self.modulated[id.0]
     }
 
     pub fn get_bool(&self, id: ParamId) -> bool {
         self.values[id.0].as_bool()
     }
 
-    /// Set by handle, coercing the value into the parameter's kind and range.
+    /// Set the base value, coercing into the parameter's kind and range. The
+    /// modulated value follows immediately so a change is visible before the
+    /// next modulation pass.
     pub fn set(&mut self, id: ParamId, value: ParamValue) {
         let coerced = self.specs[id.0].kind.coerce(value);
         self.values[id.0] = coerced;
+        self.modulated[id.0] = coerced.as_f32();
     }
 
     /// Set from a normalised 0..1 control position.
     pub fn set_normalized(&mut self, id: ParamId, norm: f32) {
         let v = self.specs[id.0].kind.from_normalized(norm);
         self.values[id.0] = v;
+        self.modulated[id.0] = v.as_f32();
+    }
+
+    // --- Modulation pass (called once per frame by the engine) ---
+
+    /// Clear last frame's modulation: effective = base, offsets zeroed.
+    pub fn reset_modulation(&mut self) {
+        for i in 0..self.values.len() {
+            self.modulated[i] = self.values[i].as_f32();
+            self.mod_offset[i] = 0.0;
+        }
+    }
+
+    /// Accumulate a normalised modulation offset onto a parameter.
+    pub fn add_mod_offset(&mut self, id: ParamId, delta: f32) {
+        self.mod_offset[id.0] += delta;
+    }
+
+    /// Apply accumulated offsets to float parameters, in normalised space so the
+    /// amount is range-independent. Non-float kinds are left at their base.
+    pub fn commit_modulation(&mut self) {
+        for i in 0..self.values.len() {
+            if self.mod_offset[i] == 0.0 {
+                continue;
+            }
+            if let ParamKind::Float { .. } = self.specs[i].kind {
+                let base_norm = self.specs[i].kind.to_normalized(self.values[i]);
+                let eff = (base_norm + self.mod_offset[i]).clamp(0.0, 1.0);
+                self.modulated[i] = self.specs[i].kind.from_normalized(eff).as_f32();
+            }
+        }
     }
 
     /// Set by path; returns the resolved handle, or `None` if unknown.

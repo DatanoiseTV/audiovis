@@ -10,7 +10,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::params::{Mapping, ParamValue};
+use crate::params::{Mapping, ModRoute, ParamValue};
 
 /// A saved patch.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -27,6 +27,9 @@ pub struct Preset {
     /// Control bindings.
     #[serde(default)]
     pub mappings: Vec<Mapping>,
+    /// Modulation routes (source -> param with amount).
+    #[serde(default)]
+    pub mod_routes: Vec<ModRoute>,
 }
 
 fn preset_version() -> u32 {

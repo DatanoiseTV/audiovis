@@ -47,6 +47,10 @@ pub enum ControlEvent {
     Disarm,
     ClearMappingsFor { path: String },
 
+    // --- Modulation matrix ---
+    /// Add/update (amount != 0) or remove (amount == 0) a modulation route.
+    SetModRoute { source: String, target: String, amount: f32 },
+
     // --- Transport / presets ---
     LoadPreset(String),
     SavePreset(String),
