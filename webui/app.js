@@ -16,39 +16,70 @@ const specsByPath = new Map();
 let generators = [];
 
 async function main() {
-  // Parse the schema kept in sync with the server. keepCase so JS field names
-  // match the .proto exactly (is_norm, beat_phase, ...).
-  const text = await (await fetch("control.proto")).text();
-  const root = protobuf.parse(text, { keepCase: true }).root;
-  ServerMsg = root.lookupType("audiovis.ServerMsg");
-  ClientMsg = root.lookupType("audiovis.ClientMsg");
+  if (typeof protobuf === "undefined") {
+    return fail("protobuf.js failed to load");
+  }
+  try {
+    setConn("loading schema");
+    // Parse the schema kept in sync with the server. keepCase so JS field names
+    // match the .proto exactly (is_norm, beat_phase, ...).
+    const res = await fetch("control.proto", { cache: "no-store" });
+    if (!res.ok) return fail(`control.proto ${res.status}`);
+    const root = protobuf.parse(await res.text(), { keepCase: true }).root;
+    ServerMsg = root.lookupType("audiovis.ServerMsg");
+    ClientMsg = root.lookupType("audiovis.ClientMsg");
+  } catch (e) {
+    console.error(e);
+    return fail("schema: " + (e && e.message ? e.message : e));
+  }
   connect();
+}
+
+function setConn(text) {
+  const el = document.getElementById("conn");
+  if (el) el.textContent = text;
+}
+
+function fail(msg) {
+  console.error("audiovis ui:", msg);
+  setConn(msg);
 }
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  setConn("connecting");
+  try {
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+  } catch (e) {
+    return fail("ws: " + (e && e.message ? e.message : e));
+  }
   ws.binaryType = "arraybuffer";
 
   ws.onopen = () => setStatus(true);
+  ws.onerror = () => setStatus(false);
   ws.onclose = () => {
     setStatus(false);
     setTimeout(connect, 1000); // auto-reconnect
   };
   ws.onmessage = (ev) => {
-    const msg = ServerMsg.decode(new Uint8Array(ev.data));
-    if (msg.schema && msg.schema.length) {
-      generators = msg.generators || [];
-      buildUI(msg.schema);
+    try {
+      const msg = ServerMsg.decode(new Uint8Array(ev.data));
+      if (msg.schema && msg.schema.length) {
+        generators = msg.generators || [];
+        buildUI(msg.schema);
+      }
+      if (msg.changes) for (const c of msg.changes) applyChange(c);
+      if (msg.telemetry) applyTelemetry(msg.telemetry);
+    } catch (e) {
+      console.error("decode error", e);
     }
-    if (msg.changes) for (const c of msg.changes) applyChange(c);
-    if (msg.telemetry) applyTelemetry(msg.telemetry);
   };
 }
 
 function setStatus(up) {
-  document.getElementById("dot").classList.toggle("up", up);
-  document.getElementById("conn").textContent = up ? "live" : "reconnecting";
+  const dot = document.getElementById("dot");
+  if (dot) dot.classList.toggle("up", up);
+  setConn(up ? "live" : "reconnecting");
 }
 
 // --- sending ---
