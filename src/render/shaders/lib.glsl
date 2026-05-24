@@ -17,6 +17,7 @@ uniform float u_hue;
 uniform float u_p1;
 uniform float u_p2;
 uniform vec3  u_audio; // low / mid / high band energy, 0..1 (filled by audio engine)
+uniform float u_beat;  // onset pulse, spikes ~1.0 on a hit and decays
 
 VARYING vec2 v_uv;
 

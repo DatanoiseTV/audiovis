@@ -195,8 +195,9 @@ impl WindowApp {
             }
         }
 
+        let beat = self.audio.beat();
         let Some(gfx) = self.gfx.as_mut() else { return };
-        gfx.pipeline.set_audio(low, mid, high);
+        gfx.pipeline.set_audio(low, mid, high, beat);
         let size = gfx.window.inner_size();
         let fc = FrameContext {
             time: now.duration_since(self.start).as_secs_f32(),

@@ -51,6 +51,8 @@ pub struct CommonUniforms {
     pub p2: f32,
     /// Low / mid / high band energy in 0..1.
     pub audio: (f32, f32, f32),
+    /// Onset pulse, 0..1.
+    pub beat: f32,
 }
 
 impl Default for CommonUniforms {
@@ -65,6 +67,7 @@ impl Default for CommonUniforms {
             p1: 0.5,
             p2: 0.5,
             audio: (0.0, 0.0, 0.0),
+            beat: 0.0,
         }
     }
 }
@@ -114,6 +117,7 @@ impl GeneratorBank {
         p.set_f32("u_p1", u.p1);
         p.set_f32("u_p2", u.p2);
         p.set_vec3("u_audio", u.audio.0, u.audio.1, u.audio.2);
+        p.set_f32("u_beat", u.beat);
         quad.draw();
     }
 }

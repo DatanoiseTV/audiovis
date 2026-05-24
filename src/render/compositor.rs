@@ -41,8 +41,9 @@ pub struct Compositor {
     layers: Vec<LayerParams>,
     width: i32,
     height: i32,
-    /// Low/mid/high audio energy, updated by the engine each frame.
+    /// Low/mid/high audio energy + onset pulse, updated each frame.
     audio: (f32, f32, f32),
+    beat: f32,
 }
 
 impl Compositor {
@@ -107,6 +108,7 @@ impl Compositor {
             width: w,
             height: h,
             audio: (0.0, 0.0, 0.0),
+            beat: 0.0,
         })
     }
 
@@ -131,9 +133,10 @@ impl Compositor {
         Ok(())
     }
 
-    /// Update the audio band energies generators react to.
-    pub fn set_audio(&mut self, low: f32, mid: f32, high: f32) {
+    /// Update the audio band energies + onset pulse generators react to.
+    pub fn set_audio(&mut self, low: f32, mid: f32, high: f32, beat: f32) {
         self.audio = (low, mid, high);
+        self.beat = beat;
     }
 
     /// Texture holding the most recently composited frame (post chain input).
@@ -163,6 +166,7 @@ impl Compositor {
                 p1: p.get_f32(lp.p1),
                 p2: p.get_f32(lp.p2),
                 audio: self.audio,
+                beat: self.beat,
             };
             let gen = p.get(lp.generator).as_i64().max(0) as usize;
             self.layer_targets[i].bind_as_target();
