@@ -7,9 +7,65 @@
 //! Rendering is layered on top of this in later milestones; the engine itself is
 //! deliberately render-agnostic and fully unit-testable on its own.
 
+use std::time::Instant;
+
 use crate::config::Preset;
-use crate::control::ControlEvent;
+use crate::control::{ControlEvent, Transport};
 use crate::params::{MapAction, Mapping, ParamKind, ParamStore, ParamValue, SourceKey};
+
+/// Beat clock driven by MIDI clock (24 pulses per quarter note). Tracks tempo
+/// from pulse spacing and exposes beat/bar phase, so visuals can lock to the
+/// sequencer or DJ software feeding us clock.
+struct BeatClock {
+    last_pulse: Option<Instant>,
+    /// Smoothed seconds between pulses.
+    pulse_dt: f32,
+    pulses: u64,
+    running: bool,
+}
+
+impl BeatClock {
+    fn new() -> Self {
+        // 120 BPM => 0.5 s/beat => 0.5/24 s/pulse.
+        Self { last_pulse: None, pulse_dt: 0.5 / 24.0, pulses: 0, running: false }
+    }
+
+    fn pulse(&mut self, now: Instant) {
+        if let Some(prev) = self.last_pulse {
+            let dt = now.duration_since(prev).as_secs_f32();
+            // Ignore implausible gaps (>250 ms/pulse ~ <10 BPM) to ride dropouts.
+            if dt > 0.0 && dt < 0.25 {
+                self.pulse_dt = self.pulse_dt * 0.9 + dt * 0.1;
+            }
+        }
+        self.last_pulse = Some(now);
+        if self.running {
+            self.pulses = self.pulses.wrapping_add(1);
+        }
+    }
+
+    fn transport(&mut self, t: Transport) {
+        match t {
+            Transport::Start => {
+                self.pulses = 0;
+                self.running = true;
+            }
+            Transport::Continue => self.running = true,
+            Transport::Stop => self.running = false,
+        }
+    }
+
+    fn bpm(&self) -> f32 {
+        (60.0 / (self.pulse_dt * 24.0)).clamp(20.0, 300.0)
+    }
+
+    /// (bpm, beat phase 0..1, bar phase 0..1 over four beats).
+    fn phase(&self) -> (f32, f32, f32) {
+        let beat = (self.pulses % 24) as f32 / 24.0;
+        let bar = (self.pulses % 96) as f32 / 96.0;
+        (self.bpm(), beat, bar)
+    }
+}
 
 /// Something the engine did that the outside world (chiefly the web UI) may want
 /// to hear about, so controllers and the on-screen state stay consistent.
@@ -28,6 +84,7 @@ pub struct Engine {
     params: ParamStore,
     mappings: crate::params::MappingTable,
     notices: Vec<EngineNotice>,
+    clock: BeatClock,
 }
 
 impl Default for Engine {
@@ -42,6 +99,7 @@ impl Engine {
             params: ParamStore::new(),
             mappings: crate::params::MappingTable::new(),
             notices: Vec::new(),
+            clock: BeatClock::new(),
         }
     }
 
@@ -78,6 +136,14 @@ impl Engine {
             ControlEvent::SetParam { path, value } => self.set_path(&path, value),
             ControlEvent::SetParamNorm { path, norm } => self.set_path_norm(&path, norm),
             ControlEvent::Trigger { path } => self.fire_trigger(&path),
+            ControlEvent::MidiClock => {
+                self.clock.pulse(Instant::now());
+                self.publish_clock();
+            }
+            ControlEvent::Transport(t) => {
+                self.clock.transport(t);
+                self.publish_clock();
+            }
             ControlEvent::Arm { path, mode } => self.mappings.arm(path, mode),
             ControlEvent::Disarm => self.mappings.disarm(),
             ControlEvent::ClearMappingsFor { path } => self.mappings.remove_target(&path),
@@ -138,6 +204,14 @@ impl Engine {
             self.params.set(id, ParamValue::Bool(true));
             self.notices.push(EngineNotice::Triggered { path: path.to_string() });
         }
+    }
+
+    /// Write the current clock state into the `clock.*` telemetry parameters.
+    fn publish_clock(&mut self) {
+        let (bpm, beat, bar) = self.clock.phase();
+        self.set_path("clock.bpm", ParamValue::Float(bpm));
+        self.set_path("clock.beat", ParamValue::Float(beat));
+        self.set_path("clock.bar", ParamValue::Float(bar));
     }
 
     fn emit_change(&mut self, path: &str) {

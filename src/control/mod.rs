@@ -5,12 +5,23 @@
 //! the engine drains once per frame. This keeps the authoritative state on one
 //! thread while letting input run on its own threads/async tasks.
 //!
-//! The MIDI and OSC producers live in their own modules, wired up in a later
-//! milestone; they push the raw `Midi*`/`Osc` variants below onto this bus.
+//! The MIDI ([`midi`]) and OSC ([`osc`]) producers live in their own modules;
+//! they push the raw `Midi*`/`Osc` variants below onto this bus.
+
+pub mod midi;
+pub mod osc;
 
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::params::{MapMode, ParamValue};
+
+/// MIDI transport messages (System Real-Time), used to drive the beat clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Transport {
+    Start,
+    Stop,
+    Continue,
+}
 
 /// A single control message headed for the engine.
 #[derive(Debug, Clone)]
@@ -21,6 +32,10 @@ pub enum ControlEvent {
     /// A single-value OSC message. `pressed` distinguishes button-style presses
     /// (value > 0) for toggle/trigger bindings.
     Osc { addr: String, value: f32, pressed: bool },
+    /// One MIDI clock pulse (24 per quarter note); drives the beat clock.
+    MidiClock,
+    /// A MIDI transport message.
+    Transport(Transport),
 
     // --- Direct parameter control (the web UI already knows the target) ---
     SetParam { path: String, value: ParamValue },

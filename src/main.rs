@@ -78,6 +78,26 @@ fn seed_demo_params(engine: &mut Engine) {
         "Global",
         ParamKind::Float { min: 0.0, max: 4.0, default: 1.0 },
     ));
+
+    // Beat-clock telemetry, written from incoming MIDI clock.
+    p.register(ParamSpec::new(
+        "clock.bpm",
+        "BPM",
+        "Clock",
+        ParamKind::Float { min: 20.0, max: 300.0, default: 120.0 },
+    ));
+    p.register(ParamSpec::new(
+        "clock.beat",
+        "Beat phase",
+        "Clock",
+        ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 },
+    ));
+    p.register(ParamSpec::new(
+        "clock.bar",
+        "Bar phase",
+        "Clock",
+        ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 },
+    ));
 }
 
 /// Initialise tracing. An explicit `RUST_LOG` always wins so power users can
