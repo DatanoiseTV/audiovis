@@ -32,6 +32,7 @@ message Telemetry {
   float beat = 5;
   float bpm = 6;
   float beat_phase = 7;
+  float bar_phase = 8;
 }
 
 // A named, triggerable text slot (the lettering bank).
