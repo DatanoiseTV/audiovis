@@ -32,6 +32,12 @@ pub struct ModRoute {
     pub target: String,
     /// Bipolar depth, typically -1..1.
     pub amount: f32,
+    /// Smoothing / slew, 0 = instant, 1 = very smooth. Tames jittery audio.
+    #[serde(default)]
+    pub smooth: f32,
+    /// Runtime smoothed offset (not persisted).
+    #[serde(skip)]
+    pub smoothed: f32,
 }
 
 /// The set of active routes.
@@ -49,9 +55,13 @@ impl ModMatrix {
         &self.routes
     }
 
-    /// Add a route, or update the amount if one already links this source and
-    /// target. Setting amount to zero removes the route.
-    pub fn set(&mut self, source: impl Into<String>, target: impl Into<String>, amount: f32) {
+    pub fn routes_mut(&mut self) -> &mut [ModRoute] {
+        &mut self.routes
+    }
+
+    /// Add a route, or update it if one already links this source and target.
+    /// Setting amount to zero removes the route.
+    pub fn set(&mut self, source: impl Into<String>, target: impl Into<String>, amount: f32, smooth: f32) {
         let (source, target) = (source.into(), target.into());
         if amount == 0.0 {
             self.remove(&source, &target);
@@ -59,8 +69,9 @@ impl ModMatrix {
         }
         if let Some(r) = self.routes.iter_mut().find(|r| r.source == source && r.target == target) {
             r.amount = amount;
+            r.smooth = smooth;
         } else {
-            self.routes.push(ModRoute { source, target, amount });
+            self.routes.push(ModRoute { source, target, amount, smooth, smoothed: 0.0 });
         }
     }
 
@@ -85,12 +96,13 @@ mod tests {
     #[test]
     fn set_upserts_and_zero_removes() {
         let mut m = ModMatrix::new();
-        m.set("audio.low", "layer.0.opacity", 0.5);
+        m.set("audio.low", "layer.0.opacity", 0.5, 0.0);
         assert_eq!(m.routes().len(), 1);
-        m.set("audio.low", "layer.0.opacity", 0.8);
+        m.set("audio.low", "layer.0.opacity", 0.8, 0.3);
         assert_eq!(m.routes().len(), 1);
         assert_eq!(m.routes()[0].amount, 0.8);
-        m.set("audio.low", "layer.0.opacity", 0.0);
+        assert_eq!(m.routes()[0].smooth, 0.3);
+        m.set("audio.low", "layer.0.opacity", 0.0, 0.0);
         assert_eq!(m.routes().len(), 0);
     }
 }

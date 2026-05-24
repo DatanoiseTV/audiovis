@@ -45,6 +45,7 @@ message ModRoute {
   string source = 1;
   string target = 2;
   float amount = 3;
+  float smooth = 4; // 0 = instant, 1 = very smooth
 }
 
 message ServerMsg {
@@ -95,6 +96,7 @@ message ModRouteCmd {
   string source = 1;
   string target = 2;
   float amount = 3;
+  float smooth = 4;
 }
 
 message ClientMsg {

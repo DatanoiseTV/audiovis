@@ -15,23 +15,35 @@ use crate::config::Preset;
 use crate::control::{ControlEvent, Transport};
 use crate::params::{MapAction, Mapping, ModMatrix, ParamKind, ParamStore, ParamValue, SourceKey};
 
-/// Beat clock driven by MIDI clock (24 pulses per quarter note). Tracks tempo
-/// from pulse spacing and exposes beat/bar phase, so visuals can lock to the
-/// sequencer or DJ software feeding us clock.
+/// Musical cycle lengths in beats, used by the tempo-synced LFOs. Every value
+/// divides [`BEATS_WRAP`] so LFO phase stays continuous across the wrap.
+pub const LFO_DIVISIONS: &[f32] = &[32.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25];
+/// Human labels matching `LFO_DIVISIONS`, surfaced in the UI.
+pub const LFO_DIVISION_LABELS: &[&str] = &["8 bars", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"];
+/// The musical position wraps here (16 bars) to keep `f32` phase precise.
+const BEATS_WRAP: f64 = 64.0;
+
+/// Beat clock with a free-running musical position (in beats). It advances by
+/// `clock.bpm` every frame so tempo-synced LFOs move even with no external
+/// clock; incoming MIDI clock (24 ppqn) re-derives the tempo and resyncs the
+/// position, so a sequencer or DJ rig locks it tight.
 struct BeatClock {
     last_pulse: Option<Instant>,
-    /// Smoothed seconds between pulses.
+    /// Smoothed seconds between MIDI pulses.
     pulse_dt: f32,
     pulses: u64,
     running: bool,
+    /// Free-running position in beats, wrapped at [`BEATS_WRAP`].
+    beats: f64,
 }
 
 impl BeatClock {
     fn new() -> Self {
-        // 120 BPM => 0.5 s/beat => 0.5/24 s/pulse.
-        Self { last_pulse: None, pulse_dt: 0.5 / 24.0, pulses: 0, running: false }
+        // Default to free-running so LFOs animate out of the box.
+        Self { last_pulse: None, pulse_dt: 0.5 / 24.0, pulses: 0, running: true, beats: 0.0 }
     }
 
+    /// One MIDI clock pulse: refine the tempo estimate and hard-sync position.
     fn pulse(&mut self, now: Instant) {
         if let Some(prev) = self.last_pulse {
             let dt = now.duration_since(prev).as_secs_f32();
@@ -41,15 +53,15 @@ impl BeatClock {
             }
         }
         self.last_pulse = Some(now);
-        if self.running {
-            self.pulses = self.pulses.wrapping_add(1);
-        }
+        self.pulses = self.pulses.wrapping_add(1);
+        self.beats = (self.pulses as f64 / 24.0) % BEATS_WRAP; // resync to external
     }
 
     fn transport(&mut self, t: Transport) {
         match t {
             Transport::Start => {
                 self.pulses = 0;
+                self.beats = 0.0;
                 self.running = true;
             }
             Transport::Continue => self.running = true,
@@ -57,15 +69,20 @@ impl BeatClock {
         }
     }
 
+    /// Tempo from MIDI pulse spacing.
     fn bpm(&self) -> f32 {
         (60.0 / (self.pulse_dt * 24.0)).clamp(20.0, 300.0)
     }
 
-    /// (bpm, beat phase 0..1, bar phase 0..1 over four beats).
-    fn phase(&self) -> (f32, f32, f32) {
-        let beat = (self.pulses % 24) as f32 / 24.0;
-        let bar = (self.pulses % 96) as f32 / 96.0;
-        (self.bpm(), beat, bar)
+    /// Advance the free-running position by `dt` seconds at `bpm`.
+    fn advance(&mut self, dt: f32, bpm: f32) {
+        if self.running {
+            self.beats = (self.beats + dt as f64 * (bpm as f64 / 60.0)) % BEATS_WRAP;
+        }
+    }
+
+    fn beats(&self) -> f64 {
+        self.beats
     }
 }
 
@@ -115,13 +132,18 @@ impl Engine {
     /// `amount * source`, then apply. Call before reading params for rendering.
     pub fn apply_modulation(&mut self, sources: &HashMap<String, f32>) {
         self.params.reset_modulation();
-        for route in self.modmatrix.routes() {
+        for route in self.modmatrix.routes_mut() {
             let src = sources.get(&route.source).copied().unwrap_or(0.0);
-            if src == 0.0 {
+            let raw = route.amount * src;
+            // Per-route slew: 0 smooth = instant, higher = a slower one-pole
+            // toward the target offset, so audio jitter does not snap params.
+            let coeff = 1.0 - route.smooth.clamp(0.0, 0.99) * 0.96;
+            route.smoothed += (raw - route.smoothed) * coeff;
+            if route.smoothed.abs() < 1e-5 {
                 continue;
             }
             if let Some(id) = self.params.id_of(&route.target) {
-                self.params.add_mod_offset(id, route.amount * src);
+                self.params.add_mod_offset(id, route.smoothed);
             }
         }
         self.params.commit_modulation();
@@ -162,17 +184,17 @@ impl Engine {
             ControlEvent::Trigger { path } => self.fire_trigger(&path),
             ControlEvent::MidiClock => {
                 self.clock.pulse(Instant::now());
-                self.publish_clock();
+                // Sync the tempo param from the detected MIDI tempo (silent: the
+                // BPM display rides telemetry, not a per-pulse notice flood).
+                let bpm = self.clock.bpm();
+                self.params.set_path("clock.bpm", ParamValue::Float(bpm));
             }
-            ControlEvent::Transport(t) => {
-                self.clock.transport(t);
-                self.publish_clock();
-            }
+            ControlEvent::Transport(t) => self.clock.transport(t),
             ControlEvent::Arm { path, mode } => self.mappings.arm(path, mode),
             ControlEvent::Disarm => self.mappings.disarm(),
             ControlEvent::ClearMappingsFor { path } => self.mappings.remove_target(&path),
-            ControlEvent::SetModRoute { source, target, amount } => {
-                self.modmatrix.set(source, target, amount);
+            ControlEvent::SetModRoute { source, target, amount, smooth } => {
+                self.modmatrix.set(source, target, amount, smooth);
             }
             ControlEvent::LoadPreset(path) => {
                 if let Err(e) = self.load_preset(&path) {
@@ -233,12 +255,22 @@ impl Engine {
         }
     }
 
-    /// Write the current clock state into the `clock.*` telemetry parameters.
-    fn publish_clock(&mut self) {
-        let (bpm, beat, bar) = self.clock.phase();
-        self.set_path("clock.bpm", ParamValue::Float(bpm));
-        self.set_path("clock.beat", ParamValue::Float(beat));
-        self.set_path("clock.bar", ParamValue::Float(bar));
+    /// Advance the free-running musical clock by one frame and refresh the
+    /// `clock.beat`/`clock.bar` phase params. Driven at the frame rate; uses the
+    /// `clock.bpm` param as the free-run tempo (MIDI clock writes that param).
+    /// Updates are silent (no notices) since the phase changes every frame; the
+    /// UI reads it from telemetry instead.
+    pub fn tick_clock(&mut self, dt: f32) {
+        let bpm = self.params.id_of("clock.bpm").map(|id| self.params.get_f32(id)).unwrap_or(120.0);
+        self.clock.advance(dt, bpm);
+        let beats = self.clock.beats();
+        self.params.set_path("clock.beat", ParamValue::Float(beats.rem_euclid(1.0) as f32));
+        self.params.set_path("clock.bar", ParamValue::Float((beats / 4.0).rem_euclid(1.0) as f32));
+    }
+
+    /// Free-running musical position in beats (wrapped), for tempo-synced LFOs.
+    pub fn musical_beats(&self) -> f64 {
+        self.clock.beats()
     }
 
     fn emit_change(&mut self, path: &str) {
@@ -357,7 +389,7 @@ mod tests {
         let (mut e, path) = engine_with_float();
         e.handle(ControlEvent::SetParamNorm { path: path.into(), norm: 0.5 });
         // Route a source onto the param at +0.5 depth.
-        e.handle(ControlEvent::SetModRoute { source: "audio.low".into(), target: path.into(), amount: 0.5 });
+        e.handle(ControlEvent::SetModRoute { source: "audio.low".into(), target: path.into(), amount: 0.5, smooth: 0.0 });
 
         let mut sources = HashMap::new();
         sources.insert("audio.low".into(), 1.0);

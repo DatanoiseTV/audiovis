@@ -8,10 +8,21 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-7";
+const UI_BUILD = "ui-8";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
+const DIV_NAMES = ["8 bars", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"];
+const SHAPE_NAMES = ["sine", "triangle", "saw", "square", "s&h"];
+
+// Named option lists for integer params that read better as dropdowns.
+function intOptions(path) {
+  if (path.endsWith(".generator")) return generators;
+  if (path.endsWith(".blend")) return BLEND_NAMES;
+  if (path.endsWith(".div")) return DIV_NAMES;
+  if (path.endsWith(".shape")) return SHAPE_NAMES;
+  return null;
+}
 
 let ServerMsg, ClientMsg;
 let ws = null;
@@ -136,7 +147,12 @@ function buildUI(schema) {
 
 // --- modulation matrix / mixer view ---
 
-const sendMod = (source, target, amount) => send({ mod: { source, target, amount } });
+const sendMod = (source, target, amount, smooth) => send({ mod: { source, target, amount, smooth } });
+
+// Live registry of route rows so updates are applied in place rather than
+// rebuilding the list - otherwise a server rebroadcast would destroy the slider
+// being dragged. Keyed by "source|target".
+const routeRows = new Map();
 
 function floatTargets() {
   const out = [];
@@ -148,44 +164,76 @@ function buildMatrix() {
   const sec = el("div", "group matrix");
   sec.appendChild(el("h2", null, "Modulation matrix"));
 
-  // Add-route row: source -> target @ amount.
+  // Add-route row: source -> target @ amount, with smoothing.
   const add = el("div", "modadd");
   const src = el("select");
   modSources.forEach((s) => { const o = el("option", null, s); o.value = s; src.appendChild(o); });
   const tgt = el("select");
   floatTargets().forEach((s) => { const o = el("option", null, `${s.group} / ${s.name}`); o.value = s.path; tgt.appendChild(o); });
-  const amt = el("input"); amt.type = "range"; amt.min = -1; amt.max = 1; amt.step = 0.01; amt.value = 0.5;
+  const amt = labelledRange("amt", -1, 1, 0.5);
+  const sm = labelledRange("smooth", 0, 1, 0.2);
   const addBtn = el("button", "btn", "+ route");
-  addBtn.onclick = () => { if (src.value && tgt.value) sendMod(src.value, tgt.value, parseFloat(amt.value) || 0.5); };
-  add.append(src, el("span", "arrow", "->"), tgt, amt, addBtn);
+  addBtn.onclick = () => { if (src.value && tgt.value) sendMod(src.value, tgt.value, parseFloat(amt.input.value) || 0.5, parseFloat(sm.input.value)); };
+  add.append(src, el("span", "arrow", "->"), tgt, amt.wrap, sm.wrap, addBtn);
   sec.appendChild(add);
 
+  routeRows.clear();
   routesEl = el("div", "routes");
   sec.appendChild(routesEl);
   return sec;
 }
 
+function labelledRange(name, min, max, val) {
+  const wrap = el("div", "rng");
+  const input = el("input"); input.type = "range"; input.min = min; input.max = max; input.step = 0.01; input.value = val;
+  wrap.append(el("span", "rngl", name), input);
+  return { wrap, input };
+}
+
 function renderRoutes(routes) {
   if (!routesEl) return;
-  routesEl.innerHTML = "";
-  if (!routes.length) {
-    routesEl.appendChild(el("div", "empty", "no routes - add one above"));
-    return;
-  }
+  const seen = new Set();
+  routesEl.querySelector(".empty")?.remove();
+
   for (const r of routes) {
-    const row = el("div", "route");
-    const tgtSpec = specsByPath.get(r.target);
-    const label = `${r.source} -> ${tgtSpec ? tgtSpec.name : r.target}`;
-    row.appendChild(el("div", "rlabel", label));
-    const amt = el("input"); amt.type = "range"; amt.min = -1; amt.max = 1; amt.step = 0.01; amt.value = r.amount || 0;
-    amt.oninput = () => sendMod(r.source, r.target, parseFloat(amt.value));
-    row.appendChild(amt);
-    const rm = el("button", "btn", "x");
-    rm.title = "remove route";
-    rm.onclick = () => sendMod(r.source, r.target, 0);
-    row.appendChild(rm);
-    routesEl.appendChild(row);
+    const key = `${r.source}|${r.target}`;
+    seen.add(key);
+    let row = routeRows.get(key);
+    if (!row) {
+      row = buildRouteRow(r);
+      routeRows.set(key, row);
+      routesEl.appendChild(row.el);
+    }
+    // Update sliders only when the user is not interacting with them.
+    if (document.activeElement !== row.amt) row.amt.value = r.amount || 0;
+    if (document.activeElement !== row.smooth) row.smooth.value = r.smooth || 0;
   }
+  // Drop rows whose route no longer exists.
+  for (const [key, row] of routeRows) {
+    if (!seen.has(key)) { row.el.remove(); routeRows.delete(key); }
+  }
+  if (!routeRows.size && !routesEl.querySelector(".empty")) {
+    routesEl.appendChild(el("div", "empty", "no routes - add one above"));
+  }
+}
+
+function buildRouteRow(r) {
+  const el_ = el("div", "route");
+  const tgtSpec = specsByPath.get(r.target);
+  el_.appendChild(el("div", "rlabel", `${r.source} -> ${tgtSpec ? tgtSpec.name : r.target}`));
+  const send = () => sendMod(r.source, r.target, parseFloat(amt.value), parseFloat(smooth.value));
+
+  const amt = el("input"); amt.type = "range"; amt.min = -1; amt.max = 1; amt.step = 0.01; amt.value = r.amount || 0;
+  amt.title = "amount"; amt.oninput = send;
+  const smooth = el("input"); smooth.type = "range"; smooth.min = 0; smooth.max = 1; smooth.step = 0.01; smooth.value = r.smooth || 0;
+  smooth.title = "smoothing"; smooth.oninput = send;
+
+  el_.append(amt, smooth);
+  const rm = el("button", "btn", "x");
+  rm.title = "remove route";
+  rm.onclick = () => sendMod(r.source, r.target, 0, 0);
+  el_.appendChild(rm);
+  return { el: el_, amt, smooth };
 }
 
 function buildRow(spec) {
@@ -208,10 +256,10 @@ function buildRow(spec) {
     mid.appendChild(t);
     val.style.display = "none";
     widget = { set: (v) => t.classList.toggle("on", v >= 0.5) };
-  } else if (spec.kind === "int" && (spec.path.endsWith(".generator") || spec.path.endsWith(".blend"))) {
+  } else if (spec.kind === "int" && intOptions(spec.path)) {
     const sel = el("select");
-    const opts = spec.path.endsWith(".generator") ? generators : BLEND_NAMES;
-    opts.forEach((nm, i) => { const o = el("option", null, `${i} ${nm}`); o.value = i; sel.appendChild(o); });
+    const opts = intOptions(spec.path);
+    opts.forEach((nm, i) => { const o = el("option", null, nm); o.value = i; sel.appendChild(o); });
     sel.onchange = () => sendRaw(spec.path, parseInt(sel.value, 10));
     mid.appendChild(sel);
     val.style.display = "none";

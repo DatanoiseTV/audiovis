@@ -134,7 +134,7 @@ impl WebHandle {
             .modmatrix()
             .routes()
             .iter()
-            .map(|r| proto::ModRoute { source: r.source.clone(), target: r.target.clone(), amount: r.amount })
+            .map(|r| proto::ModRoute { source: r.source.clone(), target: r.target.clone(), amount: r.amount, smooth: r.smooth })
             .collect();
         if let Ok(mut s) = self.snapshot.write() {
             if s.mod_routes == routes {
@@ -207,7 +207,7 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
         }
     }
     if let Some(m) = msg.r#mod {
-        out.push(ControlEvent::SetModRoute { source: m.source, target: m.target, amount: m.amount });
+        out.push(ControlEvent::SetModRoute { source: m.source, target: m.target, amount: m.amount, smooth: m.smooth });
     }
     // TextCmd is handled by the lettering bank milestone.
     out

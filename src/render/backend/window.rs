@@ -171,6 +171,9 @@ impl WindowApp {
         self.last = now;
         let time = now.duration_since(self.start).as_secs_f32();
 
+        // Advance the musical clock so tempo-synced LFOs and clock phases move.
+        self.engine.tick_clock(dt);
+
         // Feed the latest audio energies to the generators.
         let (low, mid, high) = self.audio.bands();
         let beat = self.audio.beat();
@@ -178,7 +181,7 @@ impl WindowApp {
 
         // Modulation pass: assemble the signal sources and route them onto
         // parameters before anything reads the params for rendering.
-        let sources = build_mod_sources(&self.engine, low, mid, high, rms, beat, time);
+        let sources = build_mod_sources(&self.engine, low, mid, high, rms, beat);
         self.engine.apply_modulation(&sources);
 
         // Push state to the web UI: param changes every frame, telemetry at a
@@ -279,8 +282,9 @@ fn renderer_name(gl: &Gl) -> String {
 }
 
 /// Assemble the modulation source values for this frame: audio bands (0..1),
-/// the beat clock phase, and the free-running LFOs (bipolar -1..1).
-fn build_mod_sources(engine: &Engine, low: f32, mid: f32, high: f32, rms: f32, beat: f32, time: f32) -> std::collections::HashMap<String, f32> {
+/// the beat clock phase, and the tempo-synced LFOs (bipolar -1..1).
+fn build_mod_sources(engine: &Engine, low: f32, mid: f32, high: f32, rms: f32, beat: f32) -> std::collections::HashMap<String, f32> {
+    use crate::engine::LFO_DIVISIONS;
     let mut s = std::collections::HashMap::new();
     s.insert("audio.low".into(), low);
     s.insert("audio.mid".into(), mid);
@@ -294,10 +298,14 @@ fn build_mod_sources(engine: &Engine, low: f32, mid: f32, high: f32, rms: f32, b
     s.insert("clock.beat".into(), read("clock.beat"));
     s.insert("clock.bar".into(), read("clock.bar"));
 
+    // LFOs run off the musical position so they stay locked to the measure.
+    let beats = engine.musical_beats();
     for n in 1..=3 {
-        let rate = read(&format!("lfo.{n}.rate"));
+        let div_idx = p.id_of(&format!("lfo.{n}.div")).map(|id| p.get(id).as_i64()).unwrap_or(3);
         let shape = p.id_of(&format!("lfo.{n}.shape")).map(|id| p.get(id).as_i64()).unwrap_or(0);
-        s.insert(format!("lfo.{n}"), lfo(shape, time * rate));
+        let bpc = LFO_DIVISIONS.get(div_idx as usize).copied().unwrap_or(4.0) as f64;
+        let phase = (beats / bpc) as f32;
+        s.insert(format!("lfo.{n}"), lfo(shape, phase));
     }
     s
 }
