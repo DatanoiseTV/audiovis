@@ -61,7 +61,16 @@ async fn static_handler(uri: Uri) -> Response {
     match Assets::get(&path) {
         Some(file) => {
             let mime = file.metadata.mimetype();
-            ([(header::CONTENT_TYPE, mime.to_string())], file.data.into_owned()).into_response()
+            // No caching: during a live set the operator may reload after a
+            // rebuild, and a stale cached app.js is a classic "stuck connecting".
+            (
+                [
+                    (header::CONTENT_TYPE, mime.to_string()),
+                    (header::CACHE_CONTROL, "no-store".to_string()),
+                ],
+                file.data.into_owned(),
+            )
+                .into_response()
         }
         None => (StatusCode::NOT_FOUND, "not found").into_response(),
     }
@@ -74,11 +83,13 @@ async fn ws_upgrade(ws: WebSocketUpgrade, State(state): State<AppState>) -> Resp
 /// One client connection: send the full state, then pump deltas out and
 /// commands in until either side closes.
 async fn handle_socket(socket: WebSocket, state: AppState) {
+    tracing::info!("web client connected");
     let (mut sink, mut stream) = socket.split();
     let mut rx = state.out.subscribe();
 
     // Bring the client fully up to date in one message.
     if sink.send(Message::Binary(initial_state(&state).into())).await.is_err() {
+        tracing::warn!("web client dropped during initial sync");
         return;
     }
 
@@ -109,6 +120,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             },
         }
     }
+    tracing::info!("web client disconnected");
 }
 
 /// Encode the complete current state as a single `ServerMsg`.

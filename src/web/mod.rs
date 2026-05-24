@@ -98,11 +98,21 @@ impl WebHandle {
                 },
             );
         }
+        let (schema_c, generators_c, changes_c);
         if let Ok(mut s) = self.snapshot.write() {
             s.schema = schema;
             s.generators = generators;
             s.values = values;
+            schema_c = s.schema.clone();
+            generators_c = s.generators.clone();
+            changes_c = s.values.values().cloned().collect();
+        } else {
+            return;
         }
+        // Broadcast to any client that connected before the schema was ready,
+        // so it gets its controls without needing to reconnect.
+        let msg = proto::ServerMsg { schema: schema_c, generators: generators_c, changes: changes_c, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
     }
 
     /// Forward engine notices (param changes) to clients as a delta.
