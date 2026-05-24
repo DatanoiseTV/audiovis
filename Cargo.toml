@@ -1,0 +1,38 @@
+[package]
+name = "audiovis"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Live audio-reactive VJ visualizer with VHS / analog-video aesthetics, controllable over MIDI, OSC and a web UI"
+authors = ["DatanoiseTV"]
+license = "MIT"
+repository = "https://github.com/DatanoiseTV/audiovis"
+default-run = "audiovis"
+
+[[bin]]
+name = "audiovis"
+path = "src/main.rs"
+
+[features]
+# The base binary is deliberately small so it runs on weak ARM SoCs.
+# Heavier capabilities are opt-in.
+default = []
+# USB webcam / v4l / video-file input layer (pulls in extra decode deps).
+camera = []
+
+[dependencies]
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+
+[profile.release]
+# Tuned for small, fast binaries on constrained ARM targets.
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
