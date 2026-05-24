@@ -5,6 +5,7 @@
 //! (rendering, audio, control, web) can evolve independently.
 
 mod app;
+mod audio;
 mod cli;
 mod config;
 mod control;

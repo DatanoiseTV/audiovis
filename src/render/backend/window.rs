@@ -19,6 +19,9 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
+use std::sync::Arc;
+
+use crate::audio::AudioShared;
 use crate::cli::Cli;
 use crate::control::ControlBus;
 use crate::engine::Engine;
@@ -28,7 +31,7 @@ use crate::render::{FrameContext, GlslFlavor};
 
 /// Run the desktop window backend. Blocks until the window is closed (or the
 /// frame budget set by `--frames`/`--screenshot` is reached).
-pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
+pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>) -> Result<()> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
 
@@ -45,6 +48,7 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
         cli,
         engine,
         bus,
+        audio,
         gfx: None,
         start: Instant::now(),
         last: Instant::now(),
@@ -68,6 +72,7 @@ struct WindowApp {
     cli: Cli,
     engine: Engine,
     bus: ControlBus,
+    audio: Arc<AudioShared>,
     gfx: Option<Gfx>,
     start: Instant,
     last: Instant,
@@ -156,7 +161,11 @@ impl WindowApp {
         let dt = now.duration_since(self.last).as_secs_f32();
         self.last = now;
 
+        // Feed the latest audio energies to the generators.
+        let (low, mid, high) = self.audio.bands();
+
         let Some(gfx) = self.gfx.as_mut() else { return };
+        gfx.pipeline.set_audio(low, mid, high);
         let size = gfx.window.inner_size();
         let fc = FrameContext {
             time: now.duration_since(self.start).as_secs_f32(),
