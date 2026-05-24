@@ -43,13 +43,9 @@ fn main() -> Result<()> {
     let mut engine = Engine::new();
     seed_demo_params(&mut engine);
 
-    // Apply a startup preset if one was requested.
-    if let Some(preset) = args.preset.as_deref() {
-        if let Err(e) = engine.load_preset(preset) {
-            tracing::warn!("could not load preset {preset}: {e:#}");
-        }
-    }
-
+    // Note: a startup preset is applied by the backend *after* the render
+    // pipeline registers its parameters, otherwise the layer/effect paths it
+    // references would not exist yet.
     tracing::info!(params = engine.params().len(), "core engine ready");
 
     // Hand off to the selected output backend; it owns the frame loop and

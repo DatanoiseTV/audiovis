@@ -1,74 +1,70 @@
 //! The frame pipeline.
 //!
-//! At this milestone it renders a single full-screen pass to prove the GL path
-//! works on the target dialects. The generator stack, layer compositor and the
-//! analog/glitch post chain are layered in here in following milestones; the
-//! shape (resolve params once, then draw passes each frame) stays the same.
+//! Owns the shared full-screen quad and the layer compositor, and computes the
+//! internal render size from the output size and the render-scale knob (lower
+//! scale = fewer pixels shaded, the main lever for weak GPUs). The analog and
+//! glitch post chains attach inside the compositor in later milestones.
 
 use crate::engine::Engine;
-use crate::params::ParamId;
 
-use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, Program};
+use super::compositor::Compositor;
+use super::gl::{FullscreenQuad, Gl, GlslFlavor};
 use super::FrameContext;
 
-/// Handles to the global parameters the pipeline reads every frame. Resolved
-/// once at construction so the hot path is index lookups, not string hashing.
-struct Globals {
-    brightness: Option<ParamId>,
-}
-
-impl Globals {
-    fn resolve(engine: &Engine) -> Self {
-        Self { brightness: engine.params().id_of("global.brightness") }
-    }
-
-    fn brightness(&self, engine: &Engine) -> f32 {
-        self.brightness.map(|id| engine.params().get_f32(id)).unwrap_or(1.0)
-    }
-}
-
-/// Owns the GL resources for a render target and draws frames into it.
+/// Owns the GL resources for the render target and draws frames into it.
 pub struct Pipeline {
-    gl: Gl,
     quad: FullscreenQuad,
-    test: Program,
-    globals: Globals,
-    width: u32,
-    height: u32,
+    compositor: Compositor,
+    render_scale: f32,
+    out_w: u32,
+    out_h: u32,
 }
 
 impl Pipeline {
-    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &Engine, width: u32, height: u32) -> Result<Self, String> {
+    pub fn new(
+        gl: &Gl,
+        flavor: GlslFlavor,
+        engine: &mut Engine,
+        width: u32,
+        height: u32,
+        render_scale: f32,
+    ) -> Result<Self, String> {
         let quad = FullscreenQuad::new(gl, flavor)?;
-        let test = Program::new(
-            gl,
-            flavor,
-            include_str!("shaders/fullscreen.vert"),
-            include_str!("shaders/test_plasma.frag"),
-        )?;
-        Ok(Self {
-            gl: gl.clone(),
-            quad,
-            test,
-            globals: Globals::resolve(engine),
-            width,
-            height,
-        })
+        let scale = render_scale.clamp(0.1, 1.0);
+        let (iw, ih) = internal_size(width, height, scale);
+        let compositor = Compositor::new(gl, flavor, engine, iw, ih)?;
+        Ok(Self { quad, compositor, render_scale: scale, out_w: width.max(1), out_h: height.max(1) })
+    }
+
+    /// Number of generators available, for the UI.
+    pub fn generator_count(&self) -> usize {
+        self.compositor.generator_count()
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.width = width.max(1);
-        self.height = height.max(1);
+        self.out_w = width.max(1);
+        self.out_h = height.max(1);
+        let (iw, ih) = internal_size(width, height, self.render_scale);
+        if let Err(e) = self.compositor.resize(iw, ih) {
+            tracing::warn!("resize failed: {e}");
+        }
     }
 
-    /// Render one frame straight to the bound output framebuffer.
+    /// Push the latest audio band energies through to the generators.
+    pub fn set_audio(&mut self, low: f32, mid: f32, high: f32) {
+        self.compositor.set_audio(low, mid, high);
+    }
+
+    /// Render one frame, ending with the result on the screen framebuffer.
     pub fn render(&mut self, frame: &FrameContext, engine: &Engine) {
-        gl::bind_screen(&self.gl, self.width as i32, self.height as i32);
-
-        self.test.bind();
-        self.test.set_f32("u_time", frame.time);
-        self.test.set_vec2("u_res", self.width as f32, self.height as f32);
-        self.test.set_f32("u_brightness", self.globals.brightness(engine));
-        self.quad.draw();
+        self.compositor
+            .render(&self.quad, engine, frame.time, self.out_w as i32, self.out_h as i32);
     }
+}
+
+/// Internal render resolution from the output size and scale.
+fn internal_size(width: u32, height: u32, scale: f32) -> (i32, i32) {
+    let w = ((width as f32 * scale).round() as i32).max(1);
+    let h = ((height as f32 * scale).round() as i32).max(1);
+    (w, h)
 }

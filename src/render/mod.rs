@@ -5,6 +5,8 @@
 //! Linux-only DRM backend) create that context and drive the frame loop.
 
 pub mod backend;
+pub mod compositor;
+pub mod generators;
 pub mod gl;
 pub mod pipeline;
 

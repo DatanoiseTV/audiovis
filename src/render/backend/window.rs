@@ -127,8 +127,16 @@ impl WindowApp {
 
         let size = window.inner_size();
         let (w, h) = (size.width.max(1), size.height.max(1));
-        let pipeline = Pipeline::new(&gl, GlslFlavor::GlCore, &self.engine, w, h)
+        let pipeline = Pipeline::new(&gl, GlslFlavor::GlCore, &mut self.engine, w, h, self.cli.render_scale)
             .map_err(|e| anyhow!("pipeline init failed: {e}"))?;
+
+        // The pipeline has now registered all layer/effect parameters, so a
+        // startup preset can safely resolve their paths.
+        if let Some(preset) = self.cli.preset.clone() {
+            if let Err(e) = self.engine.load_preset(&preset) {
+                tracing::warn!("could not load preset {preset}: {e:#}");
+            }
+        }
 
         tracing::info!("window backend up: {}x{} GL 3.3 Core via {}", w, h, renderer_name(&gl));
 
