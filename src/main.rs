@@ -5,11 +5,17 @@
 //! (rendering, audio, control, web) can evolve independently.
 
 mod cli;
+mod config;
+mod control;
+mod engine;
+mod params;
 mod version;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
+use control::ControlBus;
+use engine::Engine;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
@@ -28,10 +34,57 @@ fn main() -> Result<()> {
         "configuration loaded"
     );
 
-    // The engine itself is built out across subsequent milestones; for now the
-    // binary validates its configuration and reports a clean startup.
-    tracing::warn!("engine not yet wired up - this is the scaffold milestone");
+    // Stand up the core: the control bus that every input feeds, and the engine
+    // that owns the authoritative parameter state. The render loop and input
+    // sources attach to these in later milestones.
+    let bus = ControlBus::new();
+    let mut engine = Engine::new();
+    seed_demo_params(&mut engine);
+
+    // Apply a startup preset if one was requested.
+    if let Some(preset) = args.preset.as_deref() {
+        if let Err(e) = engine.load_preset(preset) {
+            tracing::warn!("could not load preset {preset}: {e:#}");
+        }
+    }
+
+    tracing::info!(
+        params = engine.params().len(),
+        "core engine ready (render loop wired up in a later milestone)"
+    );
+
+    // Drain anything already queued (nothing yet, but proves the wiring links).
+    let _sender = bus.sender();
+    for ev in bus.drain() {
+        engine.handle(ev);
+    }
     Ok(())
+}
+
+/// Register a small set of global parameters so the engine has a real surface to
+/// work with before the generators land. These are the kind of top-level knobs a
+/// performer always wants on a fader.
+fn seed_demo_params(engine: &mut Engine) {
+    use params::{ParamKind, ParamSpec};
+    let p = engine.params_mut();
+    p.register(ParamSpec::new(
+        "global.brightness",
+        "Brightness",
+        "Global",
+        ParamKind::Float { min: 0.0, max: 1.0, default: 1.0 },
+    ));
+    p.register(ParamSpec::new(
+        "global.crossfade",
+        "Crossfade",
+        "Global",
+        ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 },
+    ));
+    p.register(ParamSpec::new(
+        "global.speed",
+        "Speed",
+        "Global",
+        ParamKind::Float { min: 0.0, max: 4.0, default: 1.0 },
+    ));
 }
 
 /// Initialise tracing. An explicit `RUST_LOG` always wins so power users can
