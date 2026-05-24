@@ -8,6 +8,6 @@ pub mod mapping;
 pub mod store;
 pub mod value;
 
-pub use mapping::{Curve, MapAction, MapMode, Mapping, MappingTable, SourceKey};
+pub use mapping::{MapAction, MapMode, Mapping, MappingTable, SourceKey};
 pub use store::{ParamId, ParamSpec, ParamStore};
 pub use value::{ParamKind, ParamValue};

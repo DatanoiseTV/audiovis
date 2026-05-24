@@ -51,6 +51,16 @@ pub struct Cli {
     #[arg(long, env = "AV_PRESET")]
     pub preset: Option<String>,
 
+    /// Render this many frames then exit. Useful for smoke tests and capture.
+    /// Zero (the default) runs until closed.
+    #[arg(long, env = "AV_FRAMES", default_value_t = 0)]
+    pub frames: u64,
+
+    /// Write a PPM screenshot of the final rendered frame to this path, then
+    /// exit. Implies a short headless-style run.
+    #[arg(long, env = "AV_SCREENSHOT")]
+    pub screenshot: Option<String>,
+
     /// Log verbosity (`error`, `warn`, `info`, `debug`, `trace`). Overridable
     /// per-module via the standard `RUST_LOG` env var.
     #[arg(long, env = "AV_LOG", default_value = "info")]
