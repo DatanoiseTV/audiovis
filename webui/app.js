@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-8";
+const UI_BUILD = "ui-9";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -325,8 +325,27 @@ function applyChange(c) {
 function applyTelemetry(t) {
   setMeter("m-low", t.low); setMeter("m-mid", t.mid); setMeter("m-high", t.high); setMeter("m-rms", t.rms);
   const beat = document.getElementById("beat");
-  beat.classList.toggle("hit", (t.beat || 0) > 0.5);
+  // Flash on the audio onset or on each clock downbeat, so it visibly ticks.
+  const onDownbeat = (t.beat_phase || 0) < 0.12;
+  beat.classList.toggle("hit", (t.beat || 0) > 0.5 || onDownbeat);
   document.getElementById("bpm").textContent = `${Math.round(t.bpm || 0)} BPM`;
+
+  // The clock phase/tempo are telemetry, not notified params (they change every
+  // frame), so drive the Clock-group widgets directly from telemetry here.
+  driveWidget("clock.bpm", t.bpm || 0);
+  driveWidget("clock.beat", t.beat_phase || 0);
+  driveWidget("clock.bar", t.bar_phase || 0);
+}
+
+// Update a widget from a raw value (computing its normalised position), without
+// disturbing a control the user is editing.
+function driveWidget(path, value) {
+  const w = widgets.get(path);
+  const spec = specsByPath.get(path);
+  if (!w || !spec) return;
+  const span = (spec.max || 1) - (spec.min || 0) || 1;
+  const norm = Math.min(1, Math.max(0, (value - (spec.min || 0)) / span));
+  w.set(value, norm);
 }
 
 function setMeter(id, v) { document.getElementById(id).style.height = `${Math.min(100, (v || 0) * 100)}%`; }

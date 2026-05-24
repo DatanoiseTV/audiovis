@@ -194,7 +194,7 @@ impl WindowApp {
             if self.frame % 4 == 0 {
                 let p = self.engine.params();
                 let read = |path: &str, dflt: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(dflt);
-                web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0));
+                web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0), read("clock.bar", 0.0));
                 web.publish_mod_routes(&self.engine);
             }
         }
@@ -267,11 +267,16 @@ impl ApplicationHandler for WindowApp {
         }
     }
 
-    fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
-        // Drive continuous animation; vsync (swap interval) paces it.
+    fn about_to_wait(&mut self, el: &ActiveEventLoop) {
+        // Drive continuous animation, but pace to the target fps. Without this
+        // the loop free-runs at thousands of fps when vsync does not engage
+        // (e.g. a backgrounded window), wasting CPU and flooding the web feed.
         if let Some(gfx) = self.gfx.as_ref() {
             gfx.window.request_redraw();
         }
+        let fps = self.cli.fps.max(1);
+        let frame = std::time::Duration::from_secs_f32(1.0 / fps as f32);
+        el.set_control_flow(ControlFlow::WaitUntil(self.last + frame));
     }
 }
 
