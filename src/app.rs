@@ -5,6 +5,8 @@ use anyhow::Result;
 
 use crate::audio::AudioEngine;
 use crate::cli::{Backend, Cli};
+use crate::control::midi::MidiInputs;
+use crate::control::osc::OscInput;
 use crate::control::ControlBus;
 use crate::engine::Engine;
 use crate::render::backend;
@@ -27,6 +29,21 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
     // whole run; the renderer reads the shared feature block each frame.
     let audio = AudioEngine::start(&cli.audio_device, cli.audio_gain);
     let audio_shared = audio.shared();
+
+    // Start control inputs. Each holds a sender onto the bus and stays alive
+    // for the run (the bindings own the OS connections/threads).
+    let _midi = MidiInputs::start(&cli.midi_port, bus.sender());
+    let _osc = if cli.osc_listen.is_empty() {
+        None
+    } else {
+        match OscInput::start(&cli.osc_listen, bus.sender()) {
+            Ok(o) => Some(o),
+            Err(e) => {
+                tracing::warn!("OSC disabled: {e}");
+                None
+            }
+        }
+    };
 
     match resolve(cli.backend) {
         Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio_shared),
