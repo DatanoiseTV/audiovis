@@ -49,7 +49,7 @@ pub enum ControlEvent {
 
     // --- Modulation matrix ---
     /// Add/update (amount != 0) or remove (amount == 0) a modulation route.
-    SetModRoute { source: String, target: String, amount: f32 },
+    SetModRoute { source: String, target: String, amount: f32, smooth: f32 },
 
     // --- Transport / presets ---
     LoadPreset(String),
