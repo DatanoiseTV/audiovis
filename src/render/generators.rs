@@ -51,6 +51,12 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("interference", "shaders/gen/interference.frag"),
     gen!("cylinder", "shaders/gen/cylinder.frag"),
     gen!("sierpinski", "shaders/gen/sierpinski.frag"),
+    gen!("floorgrid", "shaders/gen/floorgrid.frag"),
+    gen!("mandala", "shaders/gen/mandala.frag"),
+    gen!("lightning", "shaders/gen/lightning.frag"),
+    gen!("clouds", "shaders/gen/clouds.frag"),
+    gen!("wormhole", "shaders/gen/wormhole.frag"),
+    gen!("bobs", "shaders/gen/bobs.frag"),
 ];
 
 /// The values fed to a generator for one draw.
