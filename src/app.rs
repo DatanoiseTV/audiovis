@@ -10,6 +10,7 @@ use crate::control::osc::OscInput;
 use crate::control::ControlBus;
 use crate::engine::Engine;
 use crate::render::backend;
+use crate::web::WebHandle;
 
 /// Resolve `auto` to a concrete backend for the current platform.
 fn resolve(backend: Backend) -> Backend {
@@ -45,8 +46,15 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
         }
     };
 
+    // Start the web control surface unless disabled.
+    let web = if cli.web_listen.is_empty() {
+        None
+    } else {
+        WebHandle::start(&cli.web_listen, bus.sender())
+    };
+
     match resolve(cli.backend) {
-        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio_shared),
+        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio_shared, web),
         Backend::Drm => {
             // Wired up in the Linux DRM/KMS milestone; until then, be explicit
             // rather than silently falling back.

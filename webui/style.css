@@ -1,0 +1,103 @@
+/* audiovis control surface - CRT/analog instrument look (see BRANDING.md). */
+:root {
+  --bg: #0a0a0f;
+  --panel: #12121a;
+  --line: #262633;
+  --text: #d7d7e0;
+  --text-dim: #7a7a8c;
+  --cyan: #35e0d8;
+  --magenta: #ff3ea5;
+  --amber: #ffb347;
+  --mono: ui-monospace, "SF Mono", "DejaVu Sans Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #14141c, #0c0c12);
+  border-bottom: 1px solid var(--line);
+}
+header .brand { font-weight: 700; letter-spacing: 3px; text-transform: uppercase; }
+header .brand b { color: var(--cyan); }
+header .spacer { flex: 1; }
+
+.status { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.dot.up { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.bpm { color: var(--magenta); font-variant-numeric: tabular-nums; }
+
+/* Telemetry meters */
+.meters { display: flex; gap: 10px; align-items: flex-end; }
+.meter { width: 26px; }
+.meter .bar { height: 34px; background: #1c1c28; border: 1px solid var(--line); position: relative; overflow: hidden; }
+.meter .fill {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+  background: linear-gradient(0deg, var(--magenta), var(--amber), var(--cyan));
+  transition: height 60ms linear;
+}
+.meter label { display: block; text-align: center; color: var(--text-dim); font-size: 10px; margin-top: 3px; }
+.beatdot { width: 14px; height: 14px; border-radius: 50%; background: #1c1c28; border: 1px solid var(--line); align-self: center; }
+.beatdot.hit { background: var(--magenta); box-shadow: 0 0 12px var(--magenta); }
+
+main { padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+
+.group {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+.group h2 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.row { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 8px; margin: 7px 0; }
+.row .name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .val { color: var(--cyan); font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
+
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--line); border-radius: 2px; outline: none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); cursor: pointer; }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); cursor: pointer; }
+
+select, input[type=text] {
+  background: #1c1c28; color: var(--text); border: 1px solid var(--line);
+  border-radius: 3px; padding: 4px 6px; font-family: var(--mono); font-size: 12px; width: 100%;
+}
+
+.toggle { width: 44px; height: 22px; border-radius: 11px; background: #1c1c28; border: 1px solid var(--line); position: relative; cursor: pointer; }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-dim); transition: all 90ms; }
+.toggle.on { background: rgba(53,224,216,0.2); border-color: var(--cyan); }
+.toggle.on .knob { left: 24px; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+
+.btn { background: #1c1c28; color: var(--text-dim); border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; font-family: var(--mono); font-size: 11px; cursor: pointer; }
+.btn:hover { color: var(--text); border-color: var(--text-dim); }
+.btn.trigger { color: var(--magenta); border-color: var(--magenta); width: 100%; padding: 6px; }
+.btn.trigger:active { background: var(--magenta); color: #000; }
+.learn { font-size: 10px; }
+.learn.armed { color: #000; background: var(--amber); border-color: var(--amber); animation: pulse 0.8s infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+
+.preset-bar { display: flex; gap: 8px; align-items: center; }
+.preset-bar input { flex: 1; }

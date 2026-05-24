@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+// Wire protocol for the web control surface. This single file is the source of
+// truth: the Rust server compiles it with prost, and the browser parses this
+// very text at runtime with protobuf.js. Keep the two ends in sync by never
+// hand-rolling either side.
+package audiovis;
+
+// --- Server -> client ---
+
+message ParamSpec {
+  string path = 1;   // unique dotted id, e.g. "layer.0.opacity"
+  string name = 2;   // display label
+  string group = 3;  // UI section
+  string kind = 4;   // "float" | "bool" | "int" | "trigger"
+  float min = 5;
+  float max = 6;
+  string unit = 7;
+}
+
+message ParamValue {
+  string path = 1;
+  float value = 2;   // raw value
+  float norm = 3;    // position in 0..1, for widgets
+}
+
+message Telemetry {
+  float low = 1;
+  float mid = 2;
+  float high = 3;
+  float rms = 4;
+  float beat = 5;
+  float bpm = 6;
+  float beat_phase = 7;
+}
+
+// A named, triggerable text slot (the lettering bank).
+message TextSlot {
+  int32 id = 1;
+  string text = 2;
+}
+
+message ServerMsg {
+  // Sent in full on connect; empty on delta updates.
+  repeated ParamSpec schema = 1;
+  repeated string generators = 2;
+  // Value updates (also the full set on connect).
+  repeated ParamValue changes = 3;
+  Telemetry telemetry = 4;
+  repeated TextSlot text = 5;
+}
+
+// --- Client -> server ---
+
+message SetParam {
+  string path = 1;
+  bool is_norm = 2;  // interpret `value` as 0..1 (true) or raw (false)
+  float value = 3;
+  bool trigger = 4;  // fire a momentary trigger param instead of setting
+}
+
+message LearnCmd {
+  string path = 1;
+  bool arm = 2;    // arm MIDI/OSC learn for this param
+  bool clear = 3;  // clear mappings for this param
+}
+
+message PresetCmd {
+  string action = 1; // "save" | "load"
+  string path = 2;
+}
+
+// Edit the text bank (set or clear a slot's text).
+message TextCmd {
+  int32 id = 1;
+  string text = 2;
+}
+
+message ClientMsg {
+  SetParam set = 1;
+  LearnCmd learn = 2;
+  PresetCmd preset = 3;
+  TextCmd text = 4;
+}

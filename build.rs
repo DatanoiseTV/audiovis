@@ -8,6 +8,8 @@
 use std::process::Command;
 
 fn main() {
+    compile_proto();
+
     // Re-run when HEAD moves so the embedded hash stays accurate.
     println!("cargo:rerun-if-changed=.git/HEAD");
 
@@ -22,6 +24,14 @@ fn main() {
 
     println!("cargo:rustc-env=AV_GIT_BRANCH={branch}");
     println!("cargo:rustc-env=AV_GIT_COMMIT={commit}{dirty}");
+}
+
+/// Compile the control protocol with protox (pure Rust, no system `protoc`)
+/// into prost types, emitted to `OUT_DIR/audiovis.rs`.
+fn compile_proto() {
+    println!("cargo:rerun-if-changed=proto/control.proto");
+    let fds = protox::compile(["proto/control.proto"], ["proto"]).expect("compile control.proto");
+    prost_build::compile_fds(fds).expect("generate prost types");
 }
 
 /// Run a git command and return its trimmed stdout, or `None` if git is

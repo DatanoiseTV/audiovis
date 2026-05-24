@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>audiovis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><b>audio</b>vis</div>
+    <div class="meters" id="meters">
+      <div class="meter"><div class="bar"><div class="fill" id="m-low"></div></div><label>low</label></div>
+      <div class="meter"><div class="bar"><div class="fill" id="m-mid"></div></div><label>mid</label></div>
+      <div class="meter"><div class="bar"><div class="fill" id="m-high"></div></div><label>high</label></div>
+      <div class="meter"><div class="bar"><div class="fill" id="m-rms"></div></div><label>rms</label></div>
+      <div class="beatdot" id="beat" title="onset"></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="bpm" id="bpm">--- BPM</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="conn">connecting</span></div>
+  </header>
+
+  <main id="groups"></main>
+
+  <!-- protobufjs runtime; it parses /control.proto at load so the schema has a
+       single source of truth shared with the Rust server. -->
+  <script src="protobuf.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
