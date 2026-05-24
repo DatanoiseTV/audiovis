@@ -56,9 +56,10 @@ impl Pipeline {
         }
     }
 
-    /// Push the latest audio band energies through to the generators.
-    pub fn set_audio(&mut self, low: f32, mid: f32, high: f32) {
-        self.compositor.set_audio(low, mid, high);
+    /// Push the latest audio band energies + onset to generators and post fx.
+    pub fn set_audio(&mut self, low: f32, mid: f32, high: f32, beat: f32) {
+        self.compositor.set_audio(low, mid, high, beat);
+        self.post.set_audio(low, mid, high, beat);
     }
 
     /// Render one frame, ending with the result on the screen framebuffer.
