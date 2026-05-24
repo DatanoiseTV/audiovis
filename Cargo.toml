@@ -46,7 +46,17 @@ realfft = "3"
 midir = "0.10"
 rosc = "0.10"
 
+# Web control surface: axum server, websockets, protobuf, embedded assets.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
+axum = { version = "0.8", features = ["ws"] }
+futures-util = "0.3"
+prost = "0.13"
+rust-embed = { version = "8", features = ["mime-guess"] }
+
 [build-dependencies]
+# Pure-Rust protobuf compilation: no system `protoc` needed.
+protox = "0.7"
+prost-build = "0.13"
 
 [profile.release]
 # Tuned for small, fast binaries on constrained ARM targets.

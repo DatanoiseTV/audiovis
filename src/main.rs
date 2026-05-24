@@ -13,6 +13,7 @@ mod engine;
 mod params;
 mod render;
 mod version;
+mod web;
 
 use anyhow::Result;
 use clap::Parser;

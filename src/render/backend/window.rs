@@ -25,13 +25,14 @@ use crate::audio::AudioShared;
 use crate::cli::Cli;
 use crate::control::ControlBus;
 use crate::engine::Engine;
+use crate::web::WebHandle;
 use crate::render::gl::{self, Gl};
 use crate::render::pipeline::Pipeline;
 use crate::render::{FrameContext, GlslFlavor};
 
 /// Run the desktop window backend. Blocks until the window is closed (or the
 /// frame budget set by `--frames`/`--screenshot` is reached).
-pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>) -> Result<()> {
+pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>, web: Option<WebHandle>) -> Result<()> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
 
@@ -49,6 +50,7 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>) -
         engine,
         bus,
         audio,
+        web,
         gfx: None,
         start: Instant::now(),
         last: Instant::now(),
@@ -73,6 +75,7 @@ struct WindowApp {
     engine: Engine,
     bus: ControlBus,
     audio: Arc<AudioShared>,
+    web: Option<WebHandle>,
     gfx: Option<Gfx>,
     start: Instant,
     last: Instant,
@@ -143,6 +146,12 @@ impl WindowApp {
             }
         }
 
+        // Publish the now-complete parameter schema to the web UI.
+        if let Some(web) = &self.web {
+            let generators = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
+            web.set_schema(&self.engine, generators);
+        }
+
         tracing::info!("window backend up: {}x{} GL 3.3 Core via {}", w, h, renderer_name(&gl));
 
         self.gfx = Some(Gfx { window, surface, context, gl, pipeline });
@@ -163,6 +172,28 @@ impl WindowApp {
 
         // Feed the latest audio energies to the generators.
         let (low, mid, high) = self.audio.bands();
+
+        // Push state to the web UI: param changes every frame, telemetry at a
+        // calmer rate. Always drain notices so they cannot accumulate.
+        let notices = self.engine.take_notices();
+        if let Some(web) = &self.web {
+            if !notices.is_empty() {
+                web.publish_notices(&notices);
+            }
+            if self.frame % 4 == 0 {
+                let p = self.engine.params();
+                let read = |path: &str, dflt: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(dflt);
+                web.publish_telemetry(
+                    low,
+                    mid,
+                    high,
+                    self.audio.rms(),
+                    self.audio.beat(),
+                    read("clock.bpm", 120.0),
+                    read("clock.beat", 0.0),
+                );
+            }
+        }
 
         let Some(gfx) = self.gfx.as_mut() else { return };
         gfx.pipeline.set_audio(low, mid, high);
