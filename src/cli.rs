@@ -35,6 +35,11 @@ pub struct Cli {
     #[arg(long, env = "AV_AUDIO_DEVICE", default_value = "")]
     pub audio_device: String,
 
+    /// Audio sensitivity: scales band energy before the 0..1 mapping. Raise it
+    /// for quiet sources, lower it if the visuals saturate.
+    #[arg(long, env = "AV_AUDIO_GAIN", default_value_t = 1.0)]
+    pub audio_gain: f32,
+
     /// MIDI input port name substring to auto-connect (empty = first available).
     #[arg(long, env = "AV_MIDI_PORT", default_value = "")]
     pub midi_port: String,

@@ -59,7 +59,7 @@ impl Compositor {
             for i in 0..NUM_LAYERS {
                 let g = format!("Layer {}", i + 1);
                 let pre = format!("layer.{i}");
-                let f = |name: &str, lo: f32, hi: f32, def: f32| ParamKind::Float { min: lo, max: hi, default: def };
+                let f = |_n: &str, lo: f32, hi: f32, def: f32| ParamKind::Float { min: lo, max: hi, default: def };
 
                 let generator = store.register(ParamSpec::new(
                     format!("{pre}.generator"),

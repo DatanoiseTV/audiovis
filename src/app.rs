@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 
+use crate::audio::AudioEngine;
 use crate::cli::{Backend, Cli};
 use crate::control::ControlBus;
 use crate::engine::Engine;
@@ -22,8 +23,13 @@ fn resolve(backend: Backend) -> Backend {
 
 /// Run the application to completion.
 pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
+    // Start audio capture before the render loop and keep it alive for the
+    // whole run; the renderer reads the shared feature block each frame.
+    let audio = AudioEngine::start(&cli.audio_device, cli.audio_gain);
+    let audio_shared = audio.shared();
+
     match resolve(cli.backend) {
-        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus),
+        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio_shared),
         Backend::Drm => {
             // Wired up in the Linux DRM/KMS milestone; until then, be explicit
             // rather than silently falling back.
