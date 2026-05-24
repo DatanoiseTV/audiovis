@@ -9,12 +9,14 @@ use crate::engine::Engine;
 
 use super::compositor::Compositor;
 use super::gl::{FullscreenQuad, Gl, GlslFlavor};
+use super::post::PostChain;
 use super::FrameContext;
 
 /// Owns the GL resources for the render target and draws frames into it.
 pub struct Pipeline {
     quad: FullscreenQuad,
     compositor: Compositor,
+    post: PostChain,
     render_scale: f32,
     out_w: u32,
     out_h: u32,
@@ -33,7 +35,8 @@ impl Pipeline {
         let scale = render_scale.clamp(0.1, 1.0);
         let (iw, ih) = internal_size(width, height, scale);
         let compositor = Compositor::new(gl, flavor, engine, iw, ih)?;
-        Ok(Self { quad, compositor, render_scale: scale, out_w: width.max(1), out_h: height.max(1) })
+        let post = PostChain::new(gl, flavor, engine, iw, ih)?;
+        Ok(Self { quad, compositor, post, render_scale: scale, out_w: width.max(1), out_h: height.max(1) })
     }
 
     /// Number of generators available, for the UI.
@@ -46,7 +49,10 @@ impl Pipeline {
         self.out_h = height.max(1);
         let (iw, ih) = internal_size(width, height, self.render_scale);
         if let Err(e) = self.compositor.resize(iw, ih) {
-            tracing::warn!("resize failed: {e}");
+            tracing::warn!("compositor resize failed: {e}");
+        }
+        if let Err(e) = self.post.resize(iw, ih) {
+            tracing::warn!("post resize failed: {e}");
         }
     }
 
@@ -57,8 +63,15 @@ impl Pipeline {
 
     /// Render one frame, ending with the result on the screen framebuffer.
     pub fn render(&mut self, frame: &FrameContext, engine: &Engine) {
-        self.compositor
-            .render(&self.quad, engine, frame.time, self.out_w as i32, self.out_h as i32);
+        self.compositor.render(&self.quad, engine, frame.time);
+        self.post.process(
+            &self.quad,
+            self.compositor.result(),
+            engine,
+            frame.time,
+            self.out_w as i32,
+            self.out_h as i32,
+        );
     }
 }
 
