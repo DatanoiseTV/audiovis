@@ -6,6 +6,11 @@
 
 "use strict";
 
+// Bump on every UI change so it is obvious in the console whether the browser
+// is running fresh assets or a stale cached copy.
+const UI_BUILD = "ui-7";
+console.log(`audiovis ${UI_BUILD} loaded`);
+
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
 
 let ServerMsg, ClientMsg;
@@ -18,6 +23,11 @@ let modSources = [];
 let routesEl = null; // container for the active modulation routes
 
 async function main() {
+  // protobuf.min.js is a plain <script> before this one, so the global should
+  // exist; retry briefly in case of odd load ordering before giving up.
+  for (let i = 0; i < 20 && typeof protobuf === "undefined"; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
   if (typeof protobuf === "undefined") {
     return fail("protobuf.js failed to load");
   }

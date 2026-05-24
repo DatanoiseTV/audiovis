@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::config::Preset;
 use crate::control::{ControlEvent, Transport};
-use crate::params::{MapAction, Mapping, ModMatrix, ModRoute, ParamKind, ParamStore, ParamValue, SourceKey};
+use crate::params::{MapAction, Mapping, ModMatrix, ParamKind, ParamStore, ParamValue, SourceKey};
 
 /// Beat clock driven by MIDI clock (24 pulses per quarter note). Tracks tempo
 /// from pulse spacing and exposes beat/bar phase, so visuals can lock to the
