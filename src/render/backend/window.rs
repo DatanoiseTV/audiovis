@@ -192,6 +192,7 @@ impl WindowApp {
                 let p = self.engine.params();
                 let read = |path: &str, dflt: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(dflt);
                 web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0));
+                web.publish_mod_routes(&self.engine);
             }
         }
 
