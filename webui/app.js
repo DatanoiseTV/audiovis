@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-9";
+const UI_BUILD = "ui-10";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -145,14 +145,28 @@ function buildUI(schema) {
   main.appendChild(buildPresetBar());
 }
 
-// --- modulation matrix / mixer view ---
+// --- modulation matrix: grid patchbay ---
+//
+// Columns are sources, rows are target params. A cell holds the route amount;
+// drag it vertically to set (bipolar), right-click to clear. Click selects a
+// cell for fine amount/smooth editing below the grid. Same protocol as before
+// (ModRouteCmd), just a denser view.
 
 const sendMod = (source, target, amount, smooth) => send({ mod: { source, target, amount, smooth } });
 
-// Live registry of route rows so updates are applied in place rather than
-// rebuilding the list - otherwise a server rebroadcast would destroy the slider
-// being dragged. Keyed by "source|target".
-const routeRows = new Map();
+const SRC_SHORT = {
+  "audio.low": "lo", "audio.mid": "mid", "audio.high": "hi", "audio.rms": "rms",
+  "audio.level": "lvl", "audio.beat": "beat", "clock.beat": "ck·b", "clock.bar": "ck·r",
+  "lfo.1": "lfo1", "lfo.2": "lfo2", "lfo.3": "lfo3",
+};
+
+const routesMap = new Map(); // "source|target" -> { amount, smooth }
+const gridTargets = [];      // ordered target paths shown as rows
+const cellMap = new Map();   // "source|target" -> cell element
+let gridEl = null, selEditorEl = null, targetPicker = null;
+let selected = null;         // { source, target }
+let drag = null;             // active cell drag state
+let dragListenersAdded = false;
 
 function floatTargets() {
   const out = [];
@@ -164,76 +178,160 @@ function buildMatrix() {
   const sec = el("div", "group matrix");
   sec.appendChild(el("h2", null, "Modulation matrix"));
 
-  // Add-route row: source -> target @ amount, with smoothing.
-  const add = el("div", "modadd");
-  const src = el("select");
-  modSources.forEach((s) => { const o = el("option", null, s); o.value = s; src.appendChild(o); });
-  const tgt = el("select");
-  floatTargets().forEach((s) => { const o = el("option", null, `${s.group} / ${s.name}`); o.value = s.path; tgt.appendChild(o); });
-  const amt = labelledRange("amt", -1, 1, 0.5);
-  const sm = labelledRange("smooth", 0, 1, 0.2);
-  const addBtn = el("button", "btn", "+ route");
-  addBtn.onclick = () => { if (src.value && tgt.value) sendMod(src.value, tgt.value, parseFloat(amt.input.value) || 0.5, parseFloat(sm.input.value)); };
-  add.append(src, el("span", "arrow", "->"), tgt, amt.wrap, sm.wrap, addBtn);
+  const add = el("div", "gridadd");
+  targetPicker = el("select");
+  const addBtn = el("button", "btn", "+ row");
+  addBtn.onclick = () => {
+    const v = targetPicker.value;
+    if (v && !gridTargets.includes(v)) { gridTargets.push(v); rebuildGrid(); }
+  };
+  add.append(el("span", "gl", "add target row:"), targetPicker, addBtn);
   sec.appendChild(add);
 
-  routeRows.clear();
-  routesEl = el("div", "routes");
-  sec.appendChild(routesEl);
+  gridEl = el("div", "grid");
+  sec.appendChild(gridEl);
+  selEditorEl = el("div", "selrow");
+  sec.appendChild(selEditorEl);
+
+  if (!dragListenersAdded) {
+    document.addEventListener("pointermove", onCellDragMove);
+    document.addEventListener("pointerup", onCellDragEnd);
+    dragListenersAdded = true;
+  }
+  rebuildGrid();
   return sec;
 }
 
-function labelledRange(name, min, max, val) {
-  const wrap = el("div", "rng");
-  const input = el("input"); input.type = "range"; input.min = min; input.max = max; input.step = 0.01; input.value = val;
-  wrap.append(el("span", "rngl", name), input);
-  return { wrap, input };
+// Rebuild the whole grid DOM (only when the set of rows changes).
+function rebuildGrid() {
+  if (!gridEl) return;
+  gridEl.innerHTML = "";
+  cellMap.clear();
+  gridEl.style.gridTemplateColumns = `130px repeat(${modSources.length}, 1fr)`;
+
+  // Header: corner + source columns.
+  gridEl.appendChild(el("div", "corner"));
+  for (const s of modSources) gridEl.appendChild(el("div", "srchead", SRC_SHORT[s] || s));
+
+  // One row per target.
+  for (const target of gridTargets) {
+    const spec = specsByPath.get(target);
+    const label = el("div", "rowlabel", spec ? `${spec.group}/${spec.name}` : target);
+    label.title = target;
+    gridEl.appendChild(label);
+    for (const source of modSources) {
+      const cell = makeCell(source, target);
+      gridEl.appendChild(cell);
+      cellMap.set(`${source}|${target}`, cell);
+    }
+  }
+
+  // Repopulate the add-target picker with rows not already shown.
+  targetPicker.innerHTML = "";
+  floatTargets().filter((s) => !gridTargets.includes(s.path)).forEach((s) => {
+    const o = el("option", null, `${s.group} / ${s.name}`); o.value = s.path; targetPicker.appendChild(o);
+  });
+
+  refreshCells();
+  renderSelected();
+}
+
+function makeCell(source, target) {
+  const cell = el("div", "cell");
+  cell.appendChild(el("div", "fill"));
+  cell.appendChild(el("span", "camt"));
+  cell.onpointerdown = (e) => {
+    e.preventDefault();
+    const r = routesMap.get(`${source}|${target}`);
+    drag = { source, target, cell, startY: e.clientY, start: r ? r.amount : 0, moved: false };
+    selected = { source, target };
+    renderSelected();
+  };
+  cell.oncontextmenu = (e) => { e.preventDefault(); sendMod(source, target, 0, 0); };
+  return cell;
+}
+
+function onCellDragMove(e) {
+  if (!drag) return;
+  drag.moved = true;
+  const amt = Math.max(-1, Math.min(1, drag.start + (drag.startY - e.clientY) * 0.006));
+  setCell(drag.cell, amt);
+  const prev = routesMap.get(`${drag.source}|${drag.target}`);
+  sendMod(drag.source, drag.target, amt, prev ? prev.smooth : 0.0);
+}
+
+function onCellDragEnd() {
+  if (!drag) return;
+  // A click without movement seeds a sensible default so a tap creates a route.
+  if (!drag.moved && !routesMap.has(`${drag.source}|${drag.target}`)) {
+    sendMod(drag.source, drag.target, 0.5, 0.0);
+  }
+  drag = null;
+}
+
+// Paint a cell from an amount: bipolar fill (cyan up / magenta down) + number.
+function setCell(cell, amount) {
+  const fill = cell.firstChild;
+  const txt = cell.lastChild;
+  const a = amount || 0;
+  cell.classList.toggle("on", Math.abs(a) > 0.001);
+  const h = Math.min(50, Math.abs(a) * 50);
+  if (a >= 0) { fill.style.bottom = "50%"; fill.style.top = ""; fill.style.background = "var(--cyan)"; }
+  else { fill.style.top = "50%"; fill.style.bottom = ""; fill.style.background = "var(--magenta)"; }
+  fill.style.height = `${h}%`;
+  txt.textContent = Math.abs(a) > 0.001 ? a.toFixed(1) : "";
+}
+
+function refreshCells() {
+  for (const [key, cell] of cellMap) {
+    if (drag && drag.cell === cell) continue; // don't fight a live drag
+    const r = routesMap.get(key);
+    setCell(cell, r ? r.amount : 0);
+  }
+}
+
+function renderSelected() {
+  if (!selEditorEl) return;
+  selEditorEl.innerHTML = "";
+  if (!selected) { selEditorEl.appendChild(el("div", "empty", "click a cell to edit amount + smoothing")); return; }
+  const key = `${selected.source}|${selected.target}`;
+  const r = routesMap.get(key) || { amount: 0, smooth: 0 };
+  const spec = specsByPath.get(selected.target);
+  selEditorEl.appendChild(el("div", "rlabel", `${selected.source} -> ${spec ? spec.name : selected.target}`));
+
+  const mk = (label, min, val, onin) => {
+    const w = el("div", "rng");
+    const i = el("input"); i.type = "range"; i.min = min; i.max = 1; i.step = 0.01; i.value = val;
+    i.oninput = onin; w.append(el("span", "rngl", label), i); return { w, i };
+  };
+  const send = () => sendMod(selected.source, selected.target, parseFloat(amt.i.value), parseFloat(sm.i.value));
+  const amt = mk("amount", -1, r.amount || 0, send);
+  const sm = mk("smooth", 0, r.smooth || 0, send);
+  const rm = el("button", "btn", "clear");
+  rm.onclick = () => sendMod(selected.source, selected.target, 0, 0);
+  selEditorEl.append(amt.w, sm.w, rm);
+  selEditorEl._amt = amt.i;
+  selEditorEl._sm = sm.i;
 }
 
 function renderRoutes(routes) {
-  if (!routesEl) return;
-  const seen = new Set();
-  routesEl.querySelector(".empty")?.remove();
-
+  // Rebuild the route lookup and add rows for any target that gained a route.
+  routesMap.clear();
+  let needRebuild = false;
   for (const r of routes) {
-    const key = `${r.source}|${r.target}`;
-    seen.add(key);
-    let row = routeRows.get(key);
-    if (!row) {
-      row = buildRouteRow(r);
-      routeRows.set(key, row);
-      routesEl.appendChild(row.el);
-    }
-    // Update sliders only when the user is not interacting with them.
-    if (document.activeElement !== row.amt) row.amt.value = r.amount || 0;
-    if (document.activeElement !== row.smooth) row.smooth.value = r.smooth || 0;
+    routesMap.set(`${r.source}|${r.target}`, { amount: r.amount || 0, smooth: r.smooth || 0 });
+    if (!gridTargets.includes(r.target)) { gridTargets.push(r.target); needRebuild = true; }
   }
-  // Drop rows whose route no longer exists.
-  for (const [key, row] of routeRows) {
-    if (!seen.has(key)) { row.el.remove(); routeRows.delete(key); }
+  if (!gridEl) return;
+  if (needRebuild) { rebuildGrid(); return; }
+  refreshCells();
+
+  // Keep the selection editor's sliders in sync unless being dragged.
+  if (selected && selEditorEl._amt) {
+    const r = routesMap.get(`${selected.source}|${selected.target}`) || { amount: 0, smooth: 0 };
+    if (document.activeElement !== selEditorEl._amt) selEditorEl._amt.value = r.amount || 0;
+    if (document.activeElement !== selEditorEl._sm) selEditorEl._sm.value = r.smooth || 0;
   }
-  if (!routeRows.size && !routesEl.querySelector(".empty")) {
-    routesEl.appendChild(el("div", "empty", "no routes - add one above"));
-  }
-}
-
-function buildRouteRow(r) {
-  const el_ = el("div", "route");
-  const tgtSpec = specsByPath.get(r.target);
-  el_.appendChild(el("div", "rlabel", `${r.source} -> ${tgtSpec ? tgtSpec.name : r.target}`));
-  const send = () => sendMod(r.source, r.target, parseFloat(amt.value), parseFloat(smooth.value));
-
-  const amt = el("input"); amt.type = "range"; amt.min = -1; amt.max = 1; amt.step = 0.01; amt.value = r.amount || 0;
-  amt.title = "amount"; amt.oninput = send;
-  const smooth = el("input"); smooth.type = "range"; smooth.min = 0; smooth.max = 1; smooth.step = 0.01; smooth.value = r.smooth || 0;
-  smooth.title = "smoothing"; smooth.oninput = send;
-
-  el_.append(amt, smooth);
-  const rm = el("button", "btn", "x");
-  rm.title = "remove route";
-  rm.onclick = () => sendMod(r.source, r.target, 0, 0);
-  el_.appendChild(rm);
-  return { el: el_, amt, smooth };
 }
 
 function buildRow(spec) {

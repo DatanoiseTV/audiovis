@@ -104,11 +104,23 @@ select, input[type=text] {
 
 /* Modulation matrix spans the full width - it's the patchbay. */
 .matrix { grid-column: 1 / -1; }
-.modadd { display: grid; grid-template-columns: 1fr auto 1.6fr 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
-.modadd .arrow { color: var(--text-dim); text-align: center; }
-.rng { display: flex; flex-direction: column; gap: 2px; }
+.gridadd { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.gridadd .gl { color: var(--text-dim); }
+.gridadd select { flex: 1; max-width: 320px; }
+
+.grid { display: grid; gap: 2px; align-items: stretch; }
+.srchead { font-size: 10px; color: var(--text-dim); text-align: center; text-transform: uppercase; letter-spacing: 1px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.rowlabel { font-size: 11px; color: var(--text); display: flex; align-items: center; padding-right: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cell { position: relative; height: 34px; background: #15151e; border: 1px solid var(--line); border-radius: 2px; cursor: ns-resize; overflow: hidden; touch-action: none; }
+.cell:hover { border-color: var(--text-dim); }
+.cell.on { border-color: var(--cyan); }
+.cell .fill { position: absolute; left: 0; right: 0; height: 0; opacity: 0.55; }
+.cell .camt { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-size: 10px; color: var(--text); font-variant-numeric: tabular-nums; pointer-events: none; }
+.cell::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line); }
+
+.selrow { display: flex; gap: 12px; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.selrow .rlabel { color: var(--magenta); min-width: 180px; }
+.rng { display: flex; flex-direction: column; gap: 2px; flex: 1; max-width: 220px; }
 .rng .rngl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-.routes { display: flex; flex-direction: column; gap: 6px; }
-.route { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 10px; align-items: center; padding: 5px 8px; background: #1a1a24; border: 1px solid var(--line); border-radius: 3px; }
-.route .rlabel { color: var(--magenta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty { color: var(--text-dim); font-style: italic; padding: 6px; }
