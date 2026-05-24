@@ -14,6 +14,8 @@ let armed = null; // path currently in MIDI/OSC learn
 const widgets = new Map(); // path -> { set(value, norm), spec }
 const specsByPath = new Map();
 let generators = [];
+let modSources = [];
+let routesEl = null; // container for the active modulation routes
 
 async function main() {
   if (typeof protobuf === "undefined") {
@@ -66,10 +68,12 @@ function connect() {
       const msg = ServerMsg.decode(new Uint8Array(ev.data));
       if (msg.schema && msg.schema.length) {
         generators = msg.generators || [];
+        if (msg.mod_sources && msg.mod_sources.length) modSources = msg.mod_sources;
         buildUI(msg.schema);
       }
       if (msg.changes) for (const c of msg.changes) applyChange(c);
       if (msg.telemetry) applyTelemetry(msg.telemetry);
+      if (msg.mod_routes_present) renderRoutes(msg.mod_routes || []);
     } catch (e) {
       console.error("decode error", e);
     }
@@ -116,7 +120,62 @@ function buildUI(schema) {
     for (const spec of specs) sec.appendChild(buildRow(spec));
     main.appendChild(sec);
   }
+  main.appendChild(buildMatrix());
   main.appendChild(buildPresetBar());
+}
+
+// --- modulation matrix / mixer view ---
+
+const sendMod = (source, target, amount) => send({ mod: { source, target, amount } });
+
+function floatTargets() {
+  const out = [];
+  for (const s of specsByPath.values()) if (s.kind === "float") out.push(s);
+  return out;
+}
+
+function buildMatrix() {
+  const sec = el("div", "group matrix");
+  sec.appendChild(el("h2", null, "Modulation matrix"));
+
+  // Add-route row: source -> target @ amount.
+  const add = el("div", "modadd");
+  const src = el("select");
+  modSources.forEach((s) => { const o = el("option", null, s); o.value = s; src.appendChild(o); });
+  const tgt = el("select");
+  floatTargets().forEach((s) => { const o = el("option", null, `${s.group} / ${s.name}`); o.value = s.path; tgt.appendChild(o); });
+  const amt = el("input"); amt.type = "range"; amt.min = -1; amt.max = 1; amt.step = 0.01; amt.value = 0.5;
+  const addBtn = el("button", "btn", "+ route");
+  addBtn.onclick = () => { if (src.value && tgt.value) sendMod(src.value, tgt.value, parseFloat(amt.value) || 0.5); };
+  add.append(src, el("span", "arrow", "->"), tgt, amt, addBtn);
+  sec.appendChild(add);
+
+  routesEl = el("div", "routes");
+  sec.appendChild(routesEl);
+  return sec;
+}
+
+function renderRoutes(routes) {
+  if (!routesEl) return;
+  routesEl.innerHTML = "";
+  if (!routes.length) {
+    routesEl.appendChild(el("div", "empty", "no routes - add one above"));
+    return;
+  }
+  for (const r of routes) {
+    const row = el("div", "route");
+    const tgtSpec = specsByPath.get(r.target);
+    const label = `${r.source} -> ${tgtSpec ? tgtSpec.name : r.target}`;
+    row.appendChild(el("div", "rlabel", label));
+    const amt = el("input"); amt.type = "range"; amt.min = -1; amt.max = 1; amt.step = 0.01; amt.value = r.amount || 0;
+    amt.oninput = () => sendMod(r.source, r.target, parseFloat(amt.value));
+    row.appendChild(amt);
+    const rm = el("button", "btn", "x");
+    rm.title = "remove route";
+    rm.onclick = () => sendMod(r.source, r.target, 0);
+    row.appendChild(rm);
+    routesEl.appendChild(row);
+  }
 }
 
 function buildRow(spec) {

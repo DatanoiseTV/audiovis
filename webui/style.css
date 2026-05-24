@@ -101,3 +101,12 @@ select, input[type=text] {
 
 .preset-bar { display: flex; gap: 8px; align-items: center; }
 .preset-bar input { flex: 1; }
+
+/* Modulation matrix spans the full width - it's the patchbay. */
+.matrix { grid-column: 1 / -1; }
+.modadd { display: grid; grid-template-columns: 1fr auto 1.4fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
+.modadd .arrow { color: var(--text-dim); }
+.routes { display: flex; flex-direction: column; gap: 6px; }
+.route { display: grid; grid-template-columns: 1fr 160px auto; gap: 10px; align-items: center; padding: 5px 8px; background: #1a1a24; border: 1px solid var(--line); border-radius: 3px; }
+.route .rlabel { color: var(--magenta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { color: var(--text-dim); font-style: italic; padding: 6px; }

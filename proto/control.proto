@@ -40,6 +40,13 @@ message TextSlot {
   string text = 2;
 }
 
+// A modulation route: a source signal driving a parameter by an amount.
+message ModRoute {
+  string source = 1;
+  string target = 2;
+  float amount = 3;
+}
+
 message ServerMsg {
   // Sent in full on connect; empty on delta updates.
   repeated ParamSpec schema = 1;
@@ -48,6 +55,13 @@ message ServerMsg {
   repeated ParamValue changes = 3;
   Telemetry telemetry = 4;
   repeated TextSlot text = 5;
+  // Available modulation source ids (sent on connect).
+  repeated string mod_sources = 6;
+  // Current modulation routes. `mod_routes_present` distinguishes "no route
+  // info in this message" from "routes are now empty" (proto3 omits empty
+  // repeated fields on the wire).
+  repeated ModRoute mod_routes = 7;
+  bool mod_routes_present = 8;
 }
 
 // --- Client -> server ---
@@ -76,9 +90,17 @@ message TextCmd {
   string text = 2;
 }
 
+// Add/update (amount != 0) or remove (amount == 0) a modulation route.
+message ModRouteCmd {
+  string source = 1;
+  string target = 2;
+  float amount = 3;
+}
+
 message ClientMsg {
   SetParam set = 1;
   LearnCmd learn = 2;
   PresetCmd preset = 3;
   TextCmd text = 4;
+  ModRouteCmd mod = 5;
 }

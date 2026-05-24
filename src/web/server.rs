@@ -132,6 +132,9 @@ fn initial_state(state: &AppState) -> Vec<u8> {
         changes: s.values.values().cloned().collect(),
         telemetry: Some(s.telemetry.clone()),
         text: s.text.clone(),
+        mod_sources: s.mod_sources.clone(),
+        mod_routes: s.mod_routes.clone(),
+        mod_routes_present: true,
     };
     msg.encode_to_vec()
 }

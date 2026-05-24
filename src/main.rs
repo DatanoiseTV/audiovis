@@ -99,6 +99,24 @@ fn seed_demo_params(engine: &mut Engine) {
         "Clock",
         ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 },
     ));
+
+    // Free-running LFOs, available as modulation sources (lfo.1 .. lfo.3).
+    for n in 1..=3 {
+        let g = "LFO";
+        p.register(ParamSpec::new(
+            format!("lfo.{n}.rate"),
+            format!("LFO {n} rate"),
+            g,
+            ParamKind::Float { min: 0.01, max: 8.0, default: 0.25 * n as f32 },
+        ));
+        // shape: 0 sine, 1 triangle, 2 saw, 3 square, 4 sample-and-hold
+        p.register(ParamSpec::new(
+            format!("lfo.{n}.shape"),
+            format!("LFO {n} shape"),
+            g,
+            ParamKind::Int { min: 0, max: 4, default: 0 },
+        ));
+    }
 }
 
 /// Initialise tracing. An explicit `RUST_LOG` always wins so power users can

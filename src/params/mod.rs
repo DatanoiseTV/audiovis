@@ -5,9 +5,11 @@
 //! - [`mapping`] - the matrix binding raw controls to parameters, with learn.
 
 pub mod mapping;
+pub mod modmatrix;
 pub mod store;
 pub mod value;
 
 pub use mapping::{MapAction, MapMode, Mapping, MappingTable, SourceKey};
+pub use modmatrix::{ModMatrix, ModRoute, MOD_SOURCES};
 pub use store::{ParamId, ParamSpec, ParamStore};
 pub use value::{ParamKind, ParamValue};

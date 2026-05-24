@@ -35,6 +35,8 @@ struct Snapshot {
     values: HashMap<String, proto::ParamValue>,
     telemetry: proto::Telemetry,
     text: Vec<proto::TextSlot>,
+    mod_sources: Vec<String>,
+    mod_routes: Vec<proto::ModRoute>,
 }
 
 /// Shared between the server tasks and the publisher.
@@ -99,19 +101,48 @@ impl WebHandle {
             );
         }
         let (schema_c, generators_c, changes_c);
+        let mod_sources: Vec<String> = crate::params::MOD_SOURCES.iter().map(|s| s.to_string()).collect();
+        let sources_c;
         if let Ok(mut s) = self.snapshot.write() {
             s.schema = schema;
             s.generators = generators;
             s.values = values;
+            s.mod_sources = mod_sources;
             schema_c = s.schema.clone();
             generators_c = s.generators.clone();
             changes_c = s.values.values().cloned().collect();
+            sources_c = s.mod_sources.clone();
         } else {
             return;
         }
         // Broadcast to any client that connected before the schema was ready,
         // so it gets its controls without needing to reconnect.
-        let msg = proto::ServerMsg { schema: schema_c, generators: generators_c, changes: changes_c, ..Default::default() };
+        let msg = proto::ServerMsg {
+            schema: schema_c,
+            generators: generators_c,
+            changes: changes_c,
+            mod_sources: sources_c,
+            ..Default::default()
+        };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Publish the current modulation routes (call at the telemetry rate; cheap
+    /// and keeps every client's matrix view in sync).
+    pub fn publish_mod_routes(&self, engine: &Engine) {
+        let routes: Vec<proto::ModRoute> = engine
+            .modmatrix()
+            .routes()
+            .iter()
+            .map(|r| proto::ModRoute { source: r.source.clone(), target: r.target.clone(), amount: r.amount })
+            .collect();
+        if let Ok(mut s) = self.snapshot.write() {
+            if s.mod_routes == routes {
+                return; // unchanged, skip the broadcast
+            }
+            s.mod_routes = routes.clone();
+        }
+        let msg = proto::ServerMsg { mod_routes: routes, mod_routes_present: true, ..Default::default() };
         let _ = self.out.send(msg.encode_to_vec());
     }
 
@@ -174,6 +205,9 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
             "load" => out.push(ControlEvent::LoadPreset(p.path)),
             _ => {}
         }
+    }
+    if let Some(m) = msg.r#mod {
+        out.push(ControlEvent::SetModRoute { source: m.source, target: m.target, amount: m.amount });
     }
     // TextCmd is handled by the lettering bank milestone.
     out

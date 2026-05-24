@@ -9,9 +9,11 @@
 
 use std::time::Instant;
 
+use std::collections::HashMap;
+
 use crate::config::Preset;
 use crate::control::{ControlEvent, Transport};
-use crate::params::{MapAction, Mapping, ParamKind, ParamStore, ParamValue, SourceKey};
+use crate::params::{MapAction, Mapping, ModMatrix, ModRoute, ParamKind, ParamStore, ParamValue, SourceKey};
 
 /// Beat clock driven by MIDI clock (24 pulses per quarter note). Tracks tempo
 /// from pulse spacing and exposes beat/bar phase, so visuals can lock to the
@@ -83,6 +85,7 @@ pub enum EngineNotice {
 pub struct Engine {
     params: ParamStore,
     mappings: crate::params::MappingTable,
+    modmatrix: ModMatrix,
     notices: Vec<EngineNotice>,
     clock: BeatClock,
 }
@@ -98,9 +101,30 @@ impl Engine {
         Self {
             params: ParamStore::new(),
             mappings: crate::params::MappingTable::new(),
+            modmatrix: ModMatrix::new(),
             notices: Vec::new(),
             clock: BeatClock::new(),
         }
+    }
+
+    pub fn modmatrix(&self) -> &ModMatrix {
+        &self.modmatrix
+    }
+
+    /// Run the modulation pass for one frame: reset, accumulate every route's
+    /// `amount * source`, then apply. Call before reading params for rendering.
+    pub fn apply_modulation(&mut self, sources: &HashMap<String, f32>) {
+        self.params.reset_modulation();
+        for route in self.modmatrix.routes() {
+            let src = sources.get(&route.source).copied().unwrap_or(0.0);
+            if src == 0.0 {
+                continue;
+            }
+            if let Some(id) = self.params.id_of(&route.target) {
+                self.params.add_mod_offset(id, route.amount * src);
+            }
+        }
+        self.params.commit_modulation();
     }
 
     pub fn params(&self) -> &ParamStore {
@@ -147,6 +171,9 @@ impl Engine {
             ControlEvent::Arm { path, mode } => self.mappings.arm(path, mode),
             ControlEvent::Disarm => self.mappings.disarm(),
             ControlEvent::ClearMappingsFor { path } => self.mappings.remove_target(&path),
+            ControlEvent::SetModRoute { source, target, amount } => {
+                self.modmatrix.set(source, target, amount);
+            }
             ControlEvent::LoadPreset(path) => {
                 if let Err(e) = self.load_preset(&path) {
                     tracing::warn!("preset load failed: {e:#}");
@@ -246,6 +273,7 @@ impl Engine {
             name: name.into(),
             params: self.params.snapshot(),
             mappings: self.mappings.mappings().to_vec(),
+            mod_routes: self.modmatrix.routes().to_vec(),
         }
     }
 
@@ -255,6 +283,7 @@ impl Engine {
             self.mappings.upsert(m.clone());
         }
         self.mappings.reindex();
+        self.modmatrix.replace_all(preset.mod_routes.clone());
         // The whole surface changed; notify every known parameter.
         let paths: Vec<String> = self.params.iter().map(|(_, s, _)| s.path.clone()).collect();
         for p in paths {
@@ -321,6 +350,29 @@ mod tests {
         assert!(e.params().get_bool(id));
         e.end_frame();
         assert!(!e.params().get_bool(id));
+    }
+
+    #[test]
+    fn modulation_offsets_effective_value_not_base() {
+        let (mut e, path) = engine_with_float();
+        e.handle(ControlEvent::SetParamNorm { path: path.into(), norm: 0.5 });
+        // Route a source onto the param at +0.5 depth.
+        e.handle(ControlEvent::SetModRoute { source: "audio.low".into(), target: path.into(), amount: 0.5 });
+
+        let mut sources = HashMap::new();
+        sources.insert("audio.low".into(), 1.0);
+        e.apply_modulation(&sources);
+
+        let id = e.params().id_of(path).unwrap();
+        // Effective (render) value pushed to the top: 0.5 base + 0.5*1.0.
+        assert!((e.params().get_f32(id) - 1.0).abs() < 1e-6);
+        // Base (UI / preset) is untouched.
+        assert!((e.params().get(id).as_f32() - 0.5).abs() < 1e-6);
+
+        // With no signal, effective falls back to base.
+        sources.insert("audio.low".into(), 0.0);
+        e.apply_modulation(&sources);
+        assert!((e.params().get_f32(id) - 0.5).abs() < 1e-6);
     }
 
     #[test]
