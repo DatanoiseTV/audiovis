@@ -6,13 +6,14 @@
 //! owns its program and parameters and is skipped entirely when disabled, so on
 //! a weak GPU you pay only for the effects you turn on.
 //!
-//! This milestone ships the analog/VHS pass; the glitch/datamosh bank adds more
-//! passes to the same chain later.
+//! Passes, in order: video feedback (trails), mirror/kaleidoscope, analog/VHS,
+//! and digital glitch. Feedback is stateful (keeps a history texture); the rest
+//! are pure functions of their input.
 
 use crate::engine::Engine;
 use crate::params::{ParamId, ParamKind, ParamSpec};
 
-use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program};
+use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program, RenderTexture};
 
 /// Audio/clock signals shared with post effects, mirroring the generator set.
 #[derive(Debug, Clone, Copy, Default)]
@@ -28,6 +29,11 @@ trait PostEffect {
     /// Bind the program and upload uniforms. The source texture is the previous
     /// stage's output; the target framebuffer is already bound by the chain.
     fn setup(&self, src: glow::Texture, engine: &Engine, time: f32, res: (f32, f32), sig: PostSignals);
+    /// Called after this effect's draw with its output texture. Stateful
+    /// effects (feedback) use it to update their history buffer.
+    fn after_draw(&mut self, _quad: &FullscreenQuad, _output: glow::Texture) {}
+    /// Resize any internal buffers when the render target changes.
+    fn resize(&mut self, _gl: &Gl, _width: i32, _height: i32) {}
 }
 
 pub struct PostChain {
@@ -46,9 +52,13 @@ impl PostChain {
         let vert = include_str!("shaders/fullscreen.vert");
         let present = Program::new(gl, flavor, vert, include_str!("shaders/composite/copy.frag"))?;
 
-        // Order: analog wash first, then digital corruption on top.
-        let effects: Vec<Box<dyn PostEffect>> =
-            vec![Box::new(Vhs::new(gl, flavor, engine)?), Box::new(Glitch::new(gl, flavor, engine)?)];
+        // Order: feedback trails, then mirror, then analog wash, then glitch.
+        let effects: Vec<Box<dyn PostEffect>> = vec![
+            Box::new(Feedback::new(gl, flavor, engine, width.max(1), height.max(1))?),
+            Box::new(Mirror::new(gl, flavor, engine)?),
+            Box::new(Vhs::new(gl, flavor, engine)?),
+            Box::new(Glitch::new(gl, flavor, engine)?),
+        ];
         let brightness = engine.params().id_of("global.brightness");
 
         let (w, h) = (width.max(1), height.max(1));
@@ -68,6 +78,9 @@ impl PostChain {
         let (w, h) = (width.max(1), height.max(1));
         if w != self.width || h != self.height {
             self.pp = PingPong::new(&self.gl, w, h)?;
+            for effect in &mut self.effects {
+                effect.resize(&self.gl, w, h);
+            }
             self.width = w;
             self.height = h;
         }
@@ -82,17 +95,21 @@ impl PostChain {
     /// Process `input` through the enabled effects and present to the screen.
     pub fn process(&mut self, quad: &FullscreenQuad, input: glow::Texture, engine: &Engine, time: f32, out_w: i32, out_h: i32) {
         let res = (self.width as f32, self.height as f32);
+        let signals = self.signals;
         let mut current = input;
 
-        for effect in &self.effects {
+        // Disjoint borrows: iterate the effects while the ping-pong is mutated.
+        let pp = &mut self.pp;
+        for effect in self.effects.iter_mut() {
             if !effect.enabled(engine) {
                 continue;
             }
-            self.pp.write_target().bind_as_target();
-            effect.setup(current, engine, time, res, self.signals);
+            pp.write_target().bind_as_target();
+            effect.setup(current, engine, time, res, signals);
             quad.draw();
-            self.pp.swap();
-            current = self.pp.read();
+            pp.swap();
+            current = pp.read();
+            effect.after_draw(quad, current);
         }
 
         // Present to the screen with master brightness.
@@ -214,5 +231,103 @@ impl PostEffect for Glitch {
         self.prog.set_f32("u_shift", p.get_f32(self.shift));
         self.prog.set_f32("u_crush", p.get_f32(self.crush));
         self.prog.set_f32("u_rate", p.get_f32(self.rate));
+    }
+}
+
+/// Video feedback / infinite-zoom trails. Stateful: keeps the previous output
+/// in a history texture and blends it back (see `shaders/post/feedback.frag`).
+struct Feedback {
+    blend: Program,
+    /// Plain copy used to write the current output into the history buffer.
+    blit: Program,
+    history: RenderTexture,
+    enable: ParamId,
+    amount: ParamId,
+    zoom: ParamId,
+    rotate: ParamId,
+}
+
+impl Feedback {
+    fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, w: i32, h: i32) -> Result<Self, String> {
+        let lib = include_str!("shaders/lib.glsl");
+        let vert = include_str!("shaders/fullscreen.vert");
+        let body = format!("{lib}\n{}", include_str!("shaders/post/feedback.frag"));
+        let blend = Program::new(gl, flavor, vert, &body).map_err(|e| format!("feedback: {e}"))?;
+        let blit = Program::new(gl, flavor, vert, include_str!("shaders/composite/copy.frag"))?;
+        let history = RenderTexture::new(gl, w, h)?;
+
+        let store = engine.params_mut();
+        let g = "Feedback";
+        let f = |lo: f32, hi: f32, def: f32| ParamKind::Float { min: lo, max: hi, default: def };
+        let enable = store.register(ParamSpec::new("post.feedback.enable", "Enable", g, ParamKind::Bool { default: false }));
+        let amount = store.register(ParamSpec::new("post.feedback.amount", "Trail", g, f(0.0, 0.99, 0.92)));
+        let zoom = store.register(ParamSpec::new("post.feedback.zoom", "Zoom", g, f(-1.0, 1.0, 0.25)));
+        let rotate = store.register(ParamSpec::new("post.feedback.rotate", "Rotate", g, f(-1.0, 1.0, 0.0)));
+        Ok(Self { blend, blit, history, enable, amount, zoom, rotate })
+    }
+}
+
+impl PostEffect for Feedback {
+    fn enabled(&self, engine: &Engine) -> bool {
+        engine.params().get_bool(self.enable)
+    }
+
+    fn setup(&self, src: glow::Texture, engine: &Engine, _time: f32, _res: (f32, f32), _sig: PostSignals) {
+        let p = engine.params();
+        self.blend.bind();
+        self.blend.set_texture("u_tex", 0, src);
+        self.blend.set_texture("u_history", 1, self.history.texture());
+        self.blend.set_f32("u_amount", p.get_f32(self.amount));
+        self.blend.set_f32("u_zoom", p.get_f32(self.zoom));
+        self.blend.set_f32("u_rotate", p.get_f32(self.rotate));
+    }
+
+    fn after_draw(&mut self, quad: &FullscreenQuad, output: glow::Texture) {
+        // Copy this frame's output into the history for the next frame.
+        self.history.bind_as_target();
+        self.blit.bind();
+        self.blit.set_texture("u_tex", 0, output);
+        self.blit.set_f32("u_brightness", 1.0);
+        quad.draw();
+    }
+
+    fn resize(&mut self, gl: &Gl, width: i32, height: i32) {
+        if let Ok(rt) = RenderTexture::new(gl, width, height) {
+            self.history = rt;
+        }
+    }
+}
+
+/// Mirror / kaleidoscope of the whole frame (see `shaders/post/mirror.frag`).
+struct Mirror {
+    prog: Program,
+    enable: ParamId,
+    mode: ParamId,
+}
+
+impl Mirror {
+    fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine) -> Result<Self, String> {
+        let lib = include_str!("shaders/lib.glsl");
+        let vert = include_str!("shaders/fullscreen.vert");
+        let body = format!("{lib}\n{}", include_str!("shaders/post/mirror.frag"));
+        let prog = Program::new(gl, flavor, vert, &body).map_err(|e| format!("mirror: {e}"))?;
+        let store = engine.params_mut();
+        let g = "Mirror";
+        let enable = store.register(ParamSpec::new("post.mirror.enable", "Enable", g, ParamKind::Bool { default: false }));
+        // 0 mirror X, 1 mirror Y, 2 quad, 3 kaleidoscope
+        let mode = store.register(ParamSpec::new("post.mirror.mode", "Mode", g, ParamKind::Int { min: 0, max: 3, default: 3 }));
+        Ok(Self { prog, enable, mode })
+    }
+}
+
+impl PostEffect for Mirror {
+    fn enabled(&self, engine: &Engine) -> bool {
+        engine.params().get_bool(self.enable)
+    }
+
+    fn setup(&self, src: glow::Texture, engine: &Engine, _time: f32, _res: (f32, f32), _sig: PostSignals) {
+        self.prog.bind();
+        self.prog.set_texture("u_tex", 0, src);
+        self.prog.set_i32("u_mode", engine.params().get(self.mode).as_i64() as i32);
     }
 }

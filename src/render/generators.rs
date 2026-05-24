@@ -36,6 +36,21 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("lissajous", "shaders/gen/lissajous.frag"),
     gen!("spectrum", "shaders/gen/spectrum.frag"),
     gen!("colorbars", "shaders/gen/colorbars.frag"),
+    // Demoscene batch.
+    gen!("rotozoom", "shaders/gen/rotozoom.frag"),
+    gen!("fire", "shaders/gen/fire.frag"),
+    gen!("copperbars", "shaders/gen/copperbars.frag"),
+    gen!("twister", "shaders/gen/twister.frag"),
+    gen!("mandelbrot", "shaders/gen/mandelbrot.frag"),
+    gen!("julia", "shaders/gen/julia.frag"),
+    gen!("raymarch", "shaders/gen/raymarch.frag"),
+    gen!("truchet", "shaders/gen/truchet.frag"),
+    gen!("hexgrid", "shaders/gen/hexgrid.frag"),
+    gen!("spiral", "shaders/gen/spiral.frag"),
+    gen!("phyllotaxis", "shaders/gen/phyllotaxis.frag"),
+    gen!("interference", "shaders/gen/interference.frag"),
+    gen!("cylinder", "shaders/gen/cylinder.frag"),
+    gen!("sierpinski", "shaders/gen/sierpinski.frag"),
 ];
 
 /// The values fed to a generator for one draw.
