@@ -38,9 +38,7 @@ pub struct Compositor {
     layer_targets: Vec<RenderTexture>,
     acc: PingPong,
     blend_prog: Program,
-    copy_prog: Program,
     layers: Vec<LayerParams>,
-    brightness: Option<ParamId>,
     width: i32,
     height: i32,
     /// Low/mid/high audio energy, updated by the engine each frame.
@@ -89,11 +87,8 @@ impl Compositor {
                 layers.push(LayerParams { generator, opacity, blend, speed, scale, warp, hue, p1, p2 });
             }
         }
-        let brightness = engine.params().id_of("global.brightness");
-
         let vert = include_str!("shaders/fullscreen.vert");
         let blend_prog = Program::new(gl, flavor, vert, include_str!("shaders/composite/blend.frag"))?;
-        let copy_prog = Program::new(gl, flavor, vert, include_str!("shaders/composite/copy.frag"))?;
 
         let (w, h) = (width.max(1), height.max(1));
         let mut layer_targets = Vec::with_capacity(NUM_LAYERS);
@@ -108,9 +103,7 @@ impl Compositor {
             layer_targets,
             acc,
             blend_prog,
-            copy_prog,
             layers,
-            brightness,
             width: w,
             height: h,
             audio: (0.0, 0.0, 0.0),
@@ -143,10 +136,14 @@ impl Compositor {
         self.audio = (low, mid, high);
     }
 
-    /// Render the full stack. `out_w`/`out_h` are the real output viewport;
-    /// the internal targets may be smaller. The output framebuffer must be the
-    /// default (screen) when this returns.
-    pub fn render(&mut self, quad: &FullscreenQuad, engine: &Engine, time: f32, out_w: i32, out_h: i32) {
+    /// Texture holding the most recently composited frame (post chain input).
+    pub fn result(&self) -> glow::Texture {
+        self.acc.read()
+    }
+
+    /// Render the full stack into the internal accumulator. The result is left
+    /// in [`result`]; presenting it to the screen is the post chain's job.
+    pub fn render(&mut self, quad: &FullscreenQuad, engine: &Engine, time: f32) {
         let p = engine.params();
         let res = (self.width as f32, self.height as f32);
 
@@ -191,13 +188,6 @@ impl Compositor {
             quad.draw();
             self.acc.swap();
         }
-
-        // 3. Present the accumulator to the screen with master brightness.
-        let brightness = self.brightness.map(|id| p.get_f32(id)).unwrap_or(1.0);
-        gl::bind_screen(&self.gl, out_w, out_h);
-        self.copy_prog.bind();
-        self.copy_prog.set_texture("u_tex", 0, self.acc.read());
-        self.copy_prog.set_f32("u_brightness", brightness);
-        quad.draw();
+        // The composited frame now sits in `self.acc.read()` (see `result`).
     }
 }

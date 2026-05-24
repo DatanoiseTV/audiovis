@@ -9,6 +9,7 @@ pub mod compositor;
 pub mod generators;
 pub mod gl;
 pub mod pipeline;
+pub mod post;
 
 pub use gl::GlslFlavor;
 
