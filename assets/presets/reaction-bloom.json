@@ -1,0 +1,8 @@
+{"version":1,"name":"reaction-bloom","params":{
+ "layer.0.generator":{"type":"int","value":33},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.hue":{"type":"float","value":0.45},
+ "post.bloom.enable":{"type":"bool","value":true},"post.bloom.amount":{"type":"float","value":0.45},
+ "post.vhs.enable":{"type":"bool","value":true},"post.vhs.vignette":{"type":"float","value":0.5}
+},"mappings":[],"mod_routes":[
+ {"source":"audio.low","target":"layer.0.p1","amount":0.25,"smooth":0.5},
+ {"source":"lfo.3","target":"layer.0.hue","amount":0.2,"smooth":0.0}
+],"text":[]}

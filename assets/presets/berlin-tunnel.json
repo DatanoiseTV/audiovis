@@ -1,14 +1,11 @@
 {"version":1,"name":"berlin-tunnel","params":{
-  "layer.0.generator":{"type":"int","value":1},
-  "layer.0.opacity":{"type":"float","value":1.0},
-  "layer.0.scale":{"type":"float","value":1.4},
-  "layer.0.hue":{"type":"float","value":0.6},
-  "post.feedback.enable":{"type":"bool","value":true},
-  "post.feedback.amount":{"type":"float","value":0.85},
-  "post.feedback.zoom":{"type":"float","value":0.35},
-  "post.vhs.enable":{"type":"bool","value":true},
-  "post.vhs.wobble":{"type":"float","value":0.35}
+ "layer.0.generator":{"type":"int","value":1},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.scale":{"type":"float","value":1.4},"layer.0.hue":{"type":"float","value":0.6},
+ "layer.1.generator":{"type":"int","value":8},"layer.1.opacity":{"type":"float","value":0.5},"layer.1.blend":{"type":"int","value":2},
+ "post.feedback.enable":{"type":"bool","value":true},"post.feedback.amount":{"type":"float","value":0.85},"post.feedback.zoom":{"type":"float","value":0.3},
+ "post.vhs.enable":{"type":"bool","value":true},"post.vhs.wobble":{"type":"float","value":0.3}
 },"mappings":[],"mod_routes":[
-  {"source":"audio.low","target":"layer.0.speed","amount":0.6,"smooth":0.3},
-  {"source":"lfo.1","target":"layer.0.hue","amount":0.3,"smooth":0.0}
-]}
+ {"source":"audio.low","target":"layer.0.speed","amount":0.7,"smooth":0.25},
+ {"source":"lfo.1","target":"layer.0.hue","amount":0.3,"smooth":0.0},
+ {"source":"audio.high","target":"post.feedback.zoom","amount":0.4,"smooth":0.2},
+ {"source":"audio.low","target":"layer.1.opacity","amount":0.4,"smooth":0.1}
+],"text":["pixelflowers"]}
