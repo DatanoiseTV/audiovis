@@ -157,3 +157,21 @@ select, input[type=text] {
 /* --- lettering bank --- */
 .textrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 5px 0; }
 .textrow input { font-family: var(--mono); }
+
+/* --- pixel-art skin (kept usable: values stay mono) --- */
+@font-face { font-family: 'pixel'; src: url('fonts/vt323.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'pixelhead'; src: url('fonts/pressstart.woff2') format('woff2'); font-display: swap; }
+
+.brand { font-family: 'pixelhead', monospace; font-size: 12px; letter-spacing: 0; }
+h2 { font-family: 'pixel', monospace; font-size: 16px; letter-spacing: 2px; }
+.row .name, .rowlabel, .srchead, .lfol, .rng .rngl, .gridadd .gl,
+.masterwrap label, .meter label, .empty, .blackout, .status, #conn { font-family: 'pixel', monospace; }
+.btn { font-family: 'pixel', monospace; font-size: 14px; letter-spacing: 1px; }
+.btn.preset { font-size: 14px; }
+select, .row .name { font-size: 13px; }
+/* numbers stay crisp + monospaced */
+.val, .bpm, .camt, input[type=text], .route .rlabel, .selrow .rlabel { font-family: var(--mono); }
+/* crisp pixels on the scope canvases */
+.lfobox canvas { image-rendering: pixelated; }
+/* faint CRT scanline wash over the header */
+header { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px); }
