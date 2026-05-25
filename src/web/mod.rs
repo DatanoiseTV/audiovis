@@ -45,6 +45,7 @@ struct Snapshot {
     audio_device: String,
     midi_ports: Vec<String>,
     midi_port: String,
+    scripts: Vec<String>,
 }
 
 /// Shared between the server tasks and the publisher.
@@ -180,6 +181,28 @@ impl WebHandle {
         let _ = self.out.send(msg.encode_to_vec());
     }
 
+    /// Publish the list of available script names.
+    pub fn publish_scripts(&self, scripts: Vec<String>) {
+        if let Ok(mut s) = self.snapshot.write() {
+            s.scripts = scripts.clone();
+        }
+        let msg = proto::ServerMsg { scripts, script_present: true, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Push a script's source into the editor (after a load).
+    pub fn publish_script_source(&self, source: &str) {
+        let msg = proto::ServerMsg { script: source.to_string(), script_present: true, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Report a script compile/runtime error ("" clears it).
+    pub fn publish_script_error(&self, error: &str) {
+        let msg =
+            proto::ServerMsg { script_error: error.to_string(), script_error_present: true, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
     /// Publish a JPEG preview frame for the web monitor (transient, not stored).
     pub fn publish_preview(&self, jpeg: Vec<u8>) {
         let msg = proto::ServerMsg { preview: jpeg, ..Default::default() };
@@ -306,6 +329,14 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
     }
     if msg.rescan_media {
         out.push(ControlEvent::RescanMedia);
+    }
+    if let Some(sc) = msg.script {
+        match sc.action.as_str() {
+            "apply" => out.push(ControlEvent::SetScript(sc.source)),
+            "save" => out.push(ControlEvent::SaveScript { name: sc.name, source: sc.source }),
+            "load" => out.push(ControlEvent::LoadScript(sc.name)),
+            _ => {}
+        }
     }
     out
 }

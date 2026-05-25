@@ -26,7 +26,9 @@ use crate::cli::Cli;
 use crate::control::midi::MidiInputs;
 use crate::control::{ControlBus, ControlEvent};
 use crate::engine::Engine;
+use crate::params::ParamValue;
 use crate::presets::PresetStore;
+use crate::script::{ScriptAction, ScriptEngine, ScriptSignals, ScriptStore};
 use crate::web::WebHandle;
 use crate::render::gl::{self, Gl};
 use crate::render::pipeline::Pipeline;
@@ -68,6 +70,9 @@ pub fn run(
         web,
         presets: PresetStore::new(),
         current_preset: String::new(),
+        script: ScriptEngine::new(),
+        scripts: ScriptStore::new(),
+        script_buf: Vec::new(),
         wave_buf: Vec::new(),
         gfx: None,
         start: Instant::now(),
@@ -101,6 +106,11 @@ struct WindowApp {
     web: Option<WebHandle>,
     presets: PresetStore,
     current_preset: String,
+    /// The embedded JS scripting runtime and its store of saved/example scripts.
+    script: ScriptEngine,
+    scripts: ScriptStore,
+    /// Reused buffer for the script's RGBA pixel surface.
+    script_buf: Vec<u8>,
     /// Reused buffer for the latest stereo waveform (interleaved L,R).
     wave_buf: Vec<f32>,
     gfx: Option<Gfx>,
@@ -187,6 +197,7 @@ impl WindowApp {
             web.publish_presets(self.presets.list(), &self.current_preset);
             web.publish_text(self.engine.text_slots());
             web.publish_mappings(self.engine.mappings_list());
+            web.publish_scripts(self.scripts.list());
         }
         self.publish_devices();
 
@@ -194,6 +205,17 @@ impl WindowApp {
 
         self.gfx = Some(Gfx { window, surface, context, gl, pipeline });
         Ok(())
+    }
+
+    /// Compile a new script source and report any error to the web UI.
+    fn apply_script(&mut self, source: &str) {
+        let err = self.script.set_source(source).err().unwrap_or_default();
+        if !err.is_empty() {
+            tracing::warn!("script error: {err}");
+        }
+        if let Some(web) = &self.web {
+            web.publish_script_error(&err);
+        }
     }
 
     /// Publish the available + selected audio/MIDI input devices to the web UI.
@@ -271,6 +293,28 @@ impl WindowApp {
                         }
                     }
                 }
+                ControlEvent::SetScript(source) => self.apply_script(&source),
+                ControlEvent::SaveScript { name, source } => {
+                    if let Err(e) = self.scripts.save(&name, &source) {
+                        tracing::warn!("script '{name}' save failed: {e}");
+                    } else {
+                        tracing::info!("saved script '{name}'");
+                    }
+                    self.apply_script(&source);
+                    if let Some(web) = &self.web {
+                        web.publish_scripts(self.scripts.list());
+                    }
+                }
+                ControlEvent::LoadScript(name) => {
+                    if let Some(source) = self.scripts.load(&name) {
+                        self.apply_script(&source);
+                        if let Some(web) = &self.web {
+                            web.publish_script_source(&source);
+                        }
+                    } else {
+                        tracing::warn!("script '{name}' not found");
+                    }
+                }
                 other => self.engine.handle(other),
             }
         }
@@ -305,6 +349,50 @@ impl WindowApp {
         // Modulation pass: assemble the signal sources and route them onto
         // parameters before anything reads the params for rendering.
         let sources = build_mod_sources(&self.engine, low, mid, high, rms, beat);
+
+        // JS script: read the live signals, drive base params and the 2D buffer
+        // before modulation layers its offsets on top.
+        if self.script.has_script() {
+            let lfo = |n: usize| sources.get(&format!("lfo.{n}")).copied().unwrap_or(0.0);
+            let sig = {
+                let p = self.engine.params();
+                let readf = |path: &str, d: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(d);
+                ScriptSignals {
+                    t: time,
+                    dt,
+                    frame: self.frame as f64,
+                    low,
+                    mid,
+                    high,
+                    rms,
+                    onset: beat,
+                    beat: readf("clock.beat", 0.0),
+                    bar: readf("clock.bar", 0.0),
+                    bpm: readf("clock.bpm", 120.0),
+                    lfos: [lfo(1), lfo(2), lfo(3), lfo(4), lfo(5), lfo(6)],
+                }
+            };
+            let outcome = self.script.run(&sig, self.engine.params());
+            for action in outcome.actions {
+                match action {
+                    ScriptAction::Set(path, v) => self.engine.handle(ControlEvent::SetParam { path, value: ParamValue::Float(v) }),
+                    ScriptAction::SetNorm(path, norm) => self.engine.handle(ControlEvent::SetParamNorm { path, norm }),
+                    ScriptAction::Trigger(path) => self.engine.handle(ControlEvent::Trigger { path }),
+                }
+            }
+            if outcome.buffer_used {
+                self.script.buffer(&mut self.script_buf);
+                if let Some(gfx) = self.gfx.as_ref() {
+                    gfx.pipeline.set_script_buffer(&self.script_buf);
+                }
+            }
+            if let Some(err) = outcome.error {
+                if let Some(web) = &self.web {
+                    web.publish_script_error(&err);
+                }
+            }
+        }
+
         self.engine.apply_modulation(&sources);
 
         // Push state to the web UI: param changes every frame, telemetry at a

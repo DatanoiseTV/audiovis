@@ -10,6 +10,7 @@ STRUCTURE.md
 # Local config / state captured at runtime
 /state
 /presets
+/scripts
 *.preset.local.json
 
 # Editor / OS noise

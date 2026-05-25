@@ -85,6 +85,14 @@ message ServerMsg {
   repeated string midi_ports = 17;
   string midi_port = 18;
   bool devices_present = 19;
+  // Scripting: available script names, a script source to load into the editor,
+  // and a compile/runtime error string. The *_present flags distinguish an
+  // absent field from an intentionally empty one.
+  repeated string scripts = 20;
+  string script = 21;
+  bool script_present = 22;
+  string script_error = 23;
+  bool script_error_present = 24;
 }
 
 // --- Client -> server ---
@@ -136,6 +144,14 @@ message DeviceCmd {
   string name = 2;
 }
 
+// Edit/run/save/load a JS script. `action` is "apply" (run live), "save"
+// (store as `name` then run) or "load" (fetch `name`, run, echo to the editor).
+message ScriptCmd {
+  string action = 1;
+  string name = 2;
+  string source = 3;
+}
+
 message ClientMsg {
   SetParam set = 1;
   LearnCmd learn = 2;
@@ -145,4 +161,5 @@ message ClientMsg {
   DeviceCmd device = 6;
   // Re-scan the media directory for newly added files.
   bool rescan_media = 7;
+  ScriptCmd script = 8;
 }

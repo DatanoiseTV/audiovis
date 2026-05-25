@@ -172,6 +172,9 @@ fn initial_state(state: &AppState) -> Vec<u8> {
         midi_ports: s.midi_ports.clone(),
         midi_port: s.midi_port.clone(),
         devices_present: true,
+        scripts: s.scripts.clone(),
+        script_present: true,
+        ..Default::default()
     };
     msg.encode_to_vec()
 }
