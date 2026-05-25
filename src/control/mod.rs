@@ -41,6 +41,8 @@ pub enum ControlEvent {
     SetParam { path: String, value: ParamValue },
     SetParamNorm { path: String, norm: f32 },
     Trigger { path: String },
+    /// Release a gated/held target (web pointer-up, mirrors a note-off).
+    Release { path: String },
 
     // --- Mapping / learn management ---
     Arm { path: String, mode: MapMode },

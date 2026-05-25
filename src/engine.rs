@@ -206,6 +206,7 @@ impl Engine {
             ControlEvent::SetParam { path, value } => self.set_path(&path, value),
             ControlEvent::SetParamNorm { path, norm } => self.set_path_norm(&path, norm),
             ControlEvent::Trigger { path } => self.fire_trigger(&path),
+            ControlEvent::Release { path } => self.release(&path),
             ControlEvent::MidiClock => {
                 self.clock.pulse(Instant::now());
                 // Sync the tempo param from the detected MIDI tempo (silent: the
@@ -214,7 +215,15 @@ impl Engine {
                 self.params.set_path("clock.bpm", ParamValue::Float(bpm));
             }
             ControlEvent::Transport(t) => self.clock.transport(t),
-            ControlEvent::Arm { path, mode } => self.mappings.arm(path, mode),
+            ControlEvent::Arm { path, mode } => {
+                // Trigger-kind params (e.g. lettering slots) learn as Gate, so a
+                // MIDI note shows on note-on and hides on note-off.
+                let mode = match self.params.id_of(&path).map(|id| &self.params.spec(id).kind) {
+                    Some(ParamKind::Trigger) => crate::params::MapMode::Gate,
+                    _ => mode,
+                };
+                self.mappings.arm(path, mode);
+            }
             ControlEvent::Disarm => self.mappings.disarm(),
             ControlEvent::ClearMappingsFor { path } => self.mappings.remove_target(&path),
             ControlEvent::SetModRoute { source, target, amount, smooth } => {
@@ -262,8 +271,38 @@ impl Engine {
                 }
             }
             MapAction::Trigger { target } => self.fire_trigger(&target),
+            MapAction::Release { target } => self.release(&target),
             MapAction::None => {}
         }
+    }
+
+    /// Release a gated target: hide the lettering slot it shows, or turn a
+    /// boolean off. Mirrors a MIDI note-off / pointer-up.
+    fn release(&mut self, path: &str) {
+        if let Some(rest) = path.strip_prefix("text.").and_then(|s| s.strip_suffix(".trigger")) {
+            if let Ok(n) = rest.parse::<usize>() {
+                if self.text_active == Some(n) {
+                    self.text_active = None;
+                }
+                return;
+            }
+        }
+        if let Some(id) = self.params.id_of(path) {
+            if matches!(self.params.spec(id).kind, ParamKind::Bool { .. }) {
+                self.params.set(id, ParamValue::Bool(false));
+                self.emit_change(path);
+            }
+        }
+    }
+
+    /// Current MIDI/OSC bindings as (source label, target path, mode label),
+    /// for the web mapping list.
+    pub fn mappings_list(&self) -> Vec<(String, String, String)> {
+        self.mappings
+            .mappings()
+            .iter()
+            .map(|m| (m.source.desc(), m.target.clone(), format!("{:?}", m.mode).to_lowercase()))
+            .collect()
     }
 
     fn set_path(&mut self, path: &str, value: ParamValue) {

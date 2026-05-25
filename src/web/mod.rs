@@ -39,6 +39,7 @@ struct Snapshot {
     mod_routes: Vec<proto::ModRoute>,
     presets: Vec<String>,
     current_preset: String,
+    mappings: Vec<proto::MidiMap>,
 }
 
 /// Shared between the server tasks and the publisher.
@@ -143,6 +144,20 @@ impl WebHandle {
         let _ = self.out.send(msg.encode_to_vec());
     }
 
+    /// Publish the active MIDI/OSC bindings for the mapping list.
+    pub fn publish_mappings(&self, list: Vec<(String, String, String)>) {
+        let maps: Vec<proto::MidiMap> =
+            list.into_iter().map(|(source, target, mode)| proto::MidiMap { source, target, mode }).collect();
+        if let Ok(mut s) = self.snapshot.write() {
+            if s.mappings == maps {
+                return;
+            }
+            s.mappings = maps.clone();
+        }
+        let msg = proto::ServerMsg { mappings: maps, mappings_present: true, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
     /// Publish the preset list and the currently-loaded preset name.
     pub fn publish_presets(&self, names: Vec<String>, current: &str) {
         if let Ok(mut s) = self.snapshot.write() {
@@ -208,7 +223,9 @@ impl WebHandle {
 fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
     let mut out = Vec::new();
     if let Some(set) = msg.set {
-        if set.trigger {
+        if set.release {
+            out.push(ControlEvent::Release { path: set.path });
+        } else if set.trigger {
             out.push(ControlEvent::Trigger { path: set.path });
         } else if set.is_norm {
             out.push(ControlEvent::SetParamNorm { path: set.path, norm: set.value });

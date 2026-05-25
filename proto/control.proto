@@ -69,6 +69,10 @@ message ServerMsg {
   repeated string presets = 9;
   // Name of the preset currently loaded, for highlighting in the browser.
   string current_preset = 10;
+  // Active MIDI/OSC bindings (`mappings_present` distinguishes "no info" from
+  // "now empty").
+  repeated MidiMap mappings = 11;
+  bool mappings_present = 12;
 }
 
 // --- Client -> server ---
@@ -78,6 +82,14 @@ message SetParam {
   bool is_norm = 2;  // interpret `value` as 0..1 (true) or raw (false)
   float value = 3;
   bool trigger = 4;  // fire a momentary trigger param instead of setting
+  bool release = 5;  // release a gated/held target (pointer-up / note-off)
+}
+
+// An active MIDI/OSC binding, for the mapping list.
+message MidiMap {
+  string source = 1; // e.g. "CC1.7", "Note1.60"
+  string target = 2; // param path
+  string mode = 3;   // absolute / toggle / trigger / gate / relative
 }
 
 message LearnCmd {

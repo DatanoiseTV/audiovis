@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-15";
+const UI_BUILD = "ui-16";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -42,6 +42,8 @@ let presetList = [];
 let currentPreset = "";
 const textSlots = [];
 const textInputs = new Map(); // slot -> input element
+let mappingList = [];
+let mapListEl = null;
 
 // LFO division lengths in beats (must match Rust LFO_DIVISIONS).
 const DIV_BEATS = [32, 16, 8, 4, 2, 1, 0.5, 0.25];
@@ -139,6 +141,7 @@ function connect() {
       if (msg.presets && msg.presets.length) { presetList = msg.presets; renderPresets(); }
       else if (msg.current_preset) renderPresets();
       if (msg.text && msg.text.length) { for (const t of msg.text) textSlots[t.id] = t.text; refreshTextInputs(); }
+      if (msg.mappings_present) { mappingList = msg.mappings || []; renderMappings(); }
     } catch (e) {
       console.error("decode error", e);
     }
@@ -164,6 +167,7 @@ const sendTrigger = (path) => send({ set: { path, trigger: true } });
 const sendLearn = (path, arm, clear) => send({ learn: { path, arm, clear } });
 const sendPreset = (action, path) => send({ preset: { action, path } });
 const sendText = (id, text) => send({ text: { id, text } });
+const sendRelease = (path) => send({ set: { path, release: true } });
 
 // --- UI building ---
 
@@ -195,11 +199,14 @@ function buildUI(schema) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
     const cls = name.startsWith("Layer") ? "group layer" : FX_GROUPS.includes(name) ? "group fx" : "group";
     const sec = el("div", cls);
-    sec.appendChild(el("h2", null, name));
+    const h = el("h2", null, name);
+    h.onclick = () => sec.classList.toggle("collapsed"); // click a header to fold it
+    sec.appendChild(h);
     for (const spec of groups.get(name)) sec.appendChild(buildRow(spec));
     if (name === "LFO") sec.appendChild(buildLfoScopes());
     main.appendChild(sec);
   }
+  main.appendChild(buildMappings());
   main.appendChild(buildMatrix());
   main.appendChild(buildPresets());
 }
@@ -520,15 +527,29 @@ function buildLettering(specs) {
   sec.appendChild(el("h2", null, "Lettering"));
   textInputs.clear();
   for (let n = 0; n < 8; n++) {
+    const path = `text.${n}.trigger`;
     const row = el("div", "textrow");
     const inp = el("input"); inp.type = "text"; inp.placeholder = `slot ${n + 1}`; inp.value = textSlots[n] || "";
     inp.oninput = () => sendText(n, inp.value);
-    const show = el("button", "btn", "show"); show.onclick = () => sendTrigger(`text.${n}.trigger`);
-    row.append(inp, show);
+    // Momentary: shown while held (mirrors a MIDI note's on/off gate).
+    const show = el("button", "btn", "hold");
+    show.title = "hold to show; bind a MIDI note via L for note-on/off gating";
+    show.onpointerdown = (e) => { e.preventDefault(); sendTrigger(path); };
+    show.onpointerup = () => sendRelease(path);
+    show.onpointerleave = () => sendRelease(path);
+    // Learn: arm this slot, then a MIDI note gates it (Trigger params learn as Gate).
+    const learn = el("button", "btn learn", "L");
+    learn.onclick = () => {
+      const arming = armed !== path;
+      document.querySelectorAll(".learn.armed").forEach((b) => b.classList.remove("armed"));
+      if (arming) { sendLearn(path, true, false); setArmed(path); learn.classList.add("armed"); }
+      else { sendLearn(path, false, false); setArmed(null); }
+    };
+    row.append(inp, show, learn);
     sec.appendChild(row);
     textInputs.set(n, inp);
   }
-  const clr = el("button", "btn", "clear"); clr.onclick = () => sendTrigger("text.clear");
+  const clr = el("button", "btn", "clear all"); clr.onclick = () => sendTrigger("text.clear");
   sec.appendChild(clr);
   // Style params (font / fx / size / pos / hue); the per-slot triggers are the
   // "show" buttons above, so skip trigger kinds here.
@@ -537,6 +558,38 @@ function buildLettering(specs) {
     sec.appendChild(buildRow(spec));
   }
   return sec;
+}
+
+// --- MIDI / OSC mapping list ---
+
+function buildMappings() {
+  const sec = el("div", "group matrix");
+  sec.appendChild(el("h2", null, "MIDI / OSC map"));
+  sec.appendChild(el("div", "hint", "arm any control's L, then move a knob / press a note to bind it"));
+  mapListEl = el("div", "maplist");
+  sec.appendChild(mapListEl);
+  renderMappings();
+  return sec;
+}
+
+function renderMappings() {
+  if (!mapListEl) return;
+  mapListEl.innerHTML = "";
+  if (!mappingList.length) {
+    mapListEl.appendChild(el("div", "empty", "no bindings yet"));
+    return;
+  }
+  for (const m of mappingList) {
+    const row = el("div", "maprow");
+    const tgt = specsByPath.get(m.target);
+    row.appendChild(el("div", "src", m.source));
+    row.appendChild(el("div", "rlabel", `${tgt ? tgt.group + " / " + tgt.name : m.target}  ·  ${m.mode}`));
+    const rm = el("button", "btn", "x");
+    rm.title = "remove binding";
+    rm.onclick = () => sendLearn(m.target, false, true); // clear mappings for this target
+    row.appendChild(rm);
+    mapListEl.appendChild(row);
+  }
 }
 
 function refreshTextInputs() {
