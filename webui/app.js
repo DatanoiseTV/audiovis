@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-29";
+const UI_BUILD = "ui-30";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -994,6 +994,18 @@ function buildScript() {
   stop.title = "clear the running script";
   stop.onclick = () => { sendScript("apply", "", ""); };
   bar.appendChild(stop);
+
+  const show = el("button", "btn", "Show 2D output");
+  show.title = "point Layer 1 at the 'script' generator so a drawing script is visible";
+  show.onclick = () => {
+    const gi = generators.indexOf("script");
+    if (gi < 0) return;
+    sendRaw("layer.0.generator", gi);
+    sendNorm("layer.0.opacity", 1.0);
+    paramValues.set("layer.0.opacity", { value: 1, norm: 1 });
+    refreshLayers();
+  };
+  bar.appendChild(show);
 
   const spacer = el("span"); spacer.style.flex = "1"; bar.appendChild(spacer);
 
