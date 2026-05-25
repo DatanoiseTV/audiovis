@@ -456,3 +456,10 @@ select, input[type=text] { padding: 4px 6px; font-size: 12px; }
 .rmlayer:hover { color: #000; background: var(--magenta); border-color: var(--magenta); box-shadow: none; }
 #addlayer { color: var(--cyan); border-color: rgba(53,224,216,0.4); }
 #addlayer:disabled { opacity: 0.4; cursor: not-allowed; }
+#addfx { color: var(--magenta); border-color: rgba(255,62,165,0.4); width: auto; padding: 5px 8px; }
+
+/* FX card header: chain position + reorder/remove controls */
+.fxpos { margin-left: auto; color: var(--magenta); font-family: var(--mono); font-size: 11px; opacity: 0.85; }
+.fxhdr { display: inline-flex; gap: 4px; margin-left: 8px; }
+.fxmove { padding: 0 6px; line-height: 1.4; font-size: 10px; color: var(--text-dim); border-color: var(--line2); }
+.fxmove:hover { color: var(--magenta); border-color: var(--magenta); box-shadow: none; }

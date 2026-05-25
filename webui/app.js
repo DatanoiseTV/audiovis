@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-27";
+const UI_BUILD = "ui-28";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -44,6 +44,7 @@ let mediaDeck = 0;           // which media layer the browser loads into
 let scriptNames = [];        // available script names (builtins + user)
 let layerCards = {};         // layer index -> its card element (dynamic stack)
 const MAX_LAYERS = 8;        // must match the compositor's NUM_LAYERS
+let fxCards = [];            // {card, enablePath, orderPath, name, pos} per FX instance
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
@@ -229,10 +230,14 @@ function buildUI(schema) {
   main.appendChild(buildMonitor()); // live output monitor up top, Resolume-style
   main.appendChild(buildMediaBrowser()); // clip-style media library grid
   layerCards = {};
+  fxCards = [];
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
-    const cls = name.startsWith("Layer") || name.startsWith("Media") ? "group layer" : FX_GROUPS.includes(name) ? "group fx" : "group";
+    const specs = groups.get(name);
+    const fxEnable = specs.find((s) => /^post\..*\.enable$/.test(s.path));
+    const isLayer = name.startsWith("Layer");
+    const cls = isLayer || name.startsWith("Media") ? "group layer" : fxEnable ? "group fx" : "group";
     const sec = el("div", cls);
     const h = el("h2", null, name);
     h.onclick = () => sec.classList.toggle("collapsed"); // click a header to fold it
@@ -248,11 +253,31 @@ function buildUI(schema) {
       rm.onclick = (e) => { e.stopPropagation(); removeLayer(idx); };
       h.appendChild(rm);
     }
-    for (const spec of groups.get(name)) sec.appendChild(buildRow(spec));
+    // FX instances are a dynamic, reorderable chain: header gets up/down + x,
+    // and the enable/order rows are managed by those (not shown as sliders).
+    let skip = null;
+    if (fxEnable) {
+      const enablePath = fxEnable.path;
+      const orderPath = enablePath.replace(/\.enable$/, ".order");
+      skip = new Set([enablePath, orderPath]);
+      sec.dataset.fx = enablePath;
+      const pos = el("span", "fxpos");
+      h.appendChild(pos);
+      fxCards.push({ card: sec, enablePath, orderPath, name, pos });
+      const up = el("button", "btn fxmove", "▲"); up.title = "move earlier in the chain";
+      up.onclick = (e) => { e.stopPropagation(); moveFx(enablePath, -1); };
+      const dn = el("button", "btn fxmove", "▼"); dn.title = "move later in the chain";
+      dn.onclick = (e) => { e.stopPropagation(); moveFx(enablePath, 1); };
+      const rm = el("button", "btn rmlayer", "×"); rm.title = "remove this effect";
+      rm.onclick = (e) => { e.stopPropagation(); removeFx(enablePath); };
+      const grp = el("span", "fxhdr"); grp.append(up, dn, rm); h.appendChild(grp);
+    }
+    for (const spec of specs) { if (!skip || !skip.has(spec.path)) sec.appendChild(buildRow(spec)); }
     if (name === "LFO") sec.appendChild(buildLfoScopes());
     main.appendChild(sec);
   }
   refreshLayers();
+  refreshFx();
   main.appendChild(buildDevices());
   main.appendChild(buildScript());
   main.appendChild(buildMappings());
@@ -304,6 +329,75 @@ function removeLayer(i) {
   paramValues.set(`layer.${i}.opacity`, { value: 0, norm: 0 });
   if (layerCards[i]) layerCards[i].style.display = "none";
   refreshLayers();
+}
+
+// --- dynamic FX chain (add / remove / reorder instances) ---
+
+const fxEnabled = (c) => { const v = paramValues.get(c.enablePath); return !!v && v.value >= 0.5; };
+const fxOrder = (c) => Math.round((paramValues.get(c.orderPath) || {}).value || 0);
+// Parse the effect type id + instance number from an enable path.
+function fxInfo(enablePath) {
+  const m = enablePath.match(/^post\.([a-z]+)(?:\.(\d+))?\.enable$/);
+  return m ? { id: m[1], inst: m[2] ? parseInt(m[2], 10) : 0 } : { id: enablePath, inst: 0 };
+}
+
+// Show only enabled FX cards, in chain order, with their position numbers.
+function refreshFx() {
+  const active = fxCards.filter(fxEnabled).sort((a, b) => fxOrder(a) - fxOrder(b));
+  for (const c of fxCards) c.card.style.display = fxEnabled(c) ? "" : "none";
+  active.forEach((c, i) => { if (c.pos) c.pos.textContent = `#${i + 1}`; });
+  renderFxAdd(active.length);
+}
+
+// Renumber the chain order densely from the current visual order.
+function renumberFx(list) {
+  list.forEach((c, i) => { sendRaw(c.orderPath, i); paramValues.set(c.orderPath, { value: i, norm: 0 }); });
+}
+
+function moveFx(enablePath, dir) {
+  const active = fxCards.filter(fxEnabled).sort((a, b) => fxOrder(a) - fxOrder(b));
+  const i = active.findIndex((c) => c.enablePath === enablePath);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= active.length) return;
+  [active[i], active[j]] = [active[j], active[i]];
+  renumberFx(active);
+  refreshFx();
+}
+
+function removeFx(enablePath) {
+  sendRaw(enablePath, 0);
+  paramValues.set(enablePath, { value: 0, norm: 0 });
+  refreshFx();
+}
+
+// Enable the lowest free instance of an effect type and append it to the chain.
+function addFx(id) {
+  const insts = fxCards.filter((c) => fxInfo(c.enablePath).id === id).sort((a, b) => fxInfo(a.enablePath).inst - fxInfo(b.enablePath).inst);
+  const free = insts.find((c) => !fxEnabled(c));
+  if (!free) return;
+  const tail = fxCards.filter(fxEnabled).reduce((m, c) => Math.max(m, fxOrder(c)), -1) + 1;
+  sendRaw(free.orderPath, tail); paramValues.set(free.orderPath, { value: tail, norm: 0 });
+  sendRaw(free.enablePath, 1); paramValues.set(free.enablePath, { value: 1, norm: 1 });
+  refreshFx();
+}
+
+// The "+ FX" picker lists the effect types (deduped from the FX instances).
+function renderFxAdd() {
+  const sel = document.getElementById("addfx");
+  if (!sel) return;
+  if (!sel.dataset.built) {
+    const seen = new Set();
+    sel.innerHTML = "";
+    const def = el("option", null, "+ FX"); def.value = ""; sel.appendChild(def);
+    for (const c of fxCards) {
+      const id = fxInfo(c.enablePath).id;
+      if (seen.has(id)) continue; seen.add(id);
+      const label = c.name.replace(/ \d+$/, "");
+      const o = el("option", null, label); o.value = id; sel.appendChild(o);
+    }
+    sel.dataset.built = "1";
+    sel.onchange = () => { if (sel.value) { addFx(sel.value); sel.value = ""; } };
+  }
 }
 
 // --- live LFO shape previews ---
@@ -1014,6 +1108,8 @@ function applyChange(c) {
   if (c.path === `media.${mediaDeck}.source`) renderMediaGrid();
   // A layer's opacity arriving (e.g. from a preset) toggles its card.
   if (/^layer\.\d+\.opacity$/.test(c.path)) refreshLayers();
+  // An FX enable/order arriving (e.g. from a preset) updates the chain view.
+  if (/^post\..*\.(enable|order)$/.test(c.path)) refreshFx();
 }
 
 function applyTelemetry(t) {
