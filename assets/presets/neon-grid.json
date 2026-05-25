@@ -1,0 +1,10 @@
+{"version":1,"name":"neon-grid","params":{
+ "layer.0.generator":{"type":"int","value":27},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.hue":{"type":"float","value":0.55},"layer.0.scale":{"type":"float","value":1.1},
+ "layer.1.generator":{"type":"int","value":29},"layer.1.opacity":{"type":"float","value":0.6},"layer.1.blend":{"type":"int","value":1},
+ "post.bloom.enable":{"type":"bool","value":true},"post.bloom.amount":{"type":"float","value":0.6},
+ "post.vhs.enable":{"type":"bool","value":true},"post.vhs.aberration":{"type":"float","value":0.5}
+},"mappings":[],"mod_routes":[
+ {"source":"audio.low","target":"layer.0.speed","amount":0.6,"smooth":0.2},
+ {"source":"audio.high","target":"layer.1.opacity","amount":0.6,"smooth":0.1},
+ {"source":"lfo.1","target":"layer.0.hue","amount":0.2,"smooth":0.0}
+],"text":[]}

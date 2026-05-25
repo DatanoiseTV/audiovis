@@ -1,75 +1,103 @@
 # audiovis
 
-A single-binary live audio-reactive VJ visualizer with a VHS / retro / analog-video
-look. It generates visuals algorithmically (no pre-rendered loops required),
-reacts to live audio, and is driven in performance over **MIDI**, **OSC** and a
-**web control surface**.
+A single-binary, live, audio-reactive **VJ visualizer** with a VHS / retro /
+analog-video and demoscene aesthetic. It generates everything algorithmically
+(no pre-rendered clips), reacts to live audio, and is driven in performance over
+**MIDI**, **OSC** and an embedded **web control surface**.
 
-It is built to run both on a capable desktop (windowed output on macOS and Linux)
-and on very small hardware: single-core ~1 GHz ARM boards such as the Raspberry Pi
-Zero or NTC C.H.I.P., rendering straight to the framebuffer with no X11 or Wayland.
+It runs on a capable desktop (windowed on macOS / Linux) and on very small
+hardware — single-core ~1 GHz ARM boards like the Raspberry Pi Zero or NTC
+C.H.I.P. — rendering straight to the framebuffer with no X11 or Wayland.
 
-## Design goals
+## Gallery
 
-- **One static binary.** Drop it on the target and run it; assets are embedded.
-- **Runs on GLES2.** The render core targets OpenGL ES 2.0 so it works on the
-  weak GPUs found on those small boards (VideoCore IV, Mali-400) and on desktop
-  GL alike. Shaders are written to the GLSL ES 1.00 / GLSL 1.20 common subset.
-- **Many generators.** A library of algorithmic visual sources (feedback,
-  plasma, reaction-diffusion, scopes, moire, flow fields, and more), layered and
-  composited, then run through an analog/VHS post chain.
-- **Everything is mappable.** Any MIDI control, OSC address or web widget can be
-  bound to any parameter of any active generator or effect, with MIDI/OSC learn.
+<table>
+<tr>
+<td><img src="docs/img/berlin-tunnel.png" width="220"><br><sub>berlin-tunnel</sub></td>
+<td><img src="docs/img/acid-kaleido.png" width="220"><br><sub>acid-kaleido</sub></td>
+<td><img src="docs/img/smoke-room.png" width="220"><br><sub>smoke-room</sub></td>
+<td><img src="docs/img/mandala-trip.png" width="220"><br><sub>mandala-trip</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/spiral-waves.png" width="220"><br><sub>spiral-waves</sub></td>
+<td><img src="docs/img/reaction-bloom.png" width="220"><br><sub>reaction-bloom</sub></td>
+<td><img src="docs/img/glitch-city.png" width="220"><br><sub>glitch-city</sub></td>
+<td><img src="docs/img/mandelzoom.png" width="220"><br><sub>mandelzoom</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/neon-grid.png" width="220"><br><sub>neon-grid</sub></td>
+<td><img src="docs/img/plasma-bloom.png" width="220"><br><sub>plasma-bloom</sub></td>
+<td><img src="docs/img/vhs-dream.png" width="220"><br><sub>vhs-dream</sub></td>
+<td><img src="docs/img/init.png" width="220"><br><sub>init</sub></td>
+</tr>
+</table>
 
-## Output backends
+*All frames are generated live; these are the bundled presets, captured at a
+random moment with no audio input.*
 
-| Platform        | Backend | Notes                                              |
-|-----------------|---------|----------------------------------------------------|
-| macOS           | window  | winit + glutin, desktop GL                         |
-| Linux (desktop) | window  | winit + glutin                                     |
-| Linux (headless)| drm     | DRM/KMS + GBM + EGL straight to the framebuffer    |
+## What's in it
 
-`--backend auto` selects a sensible default per platform.
+- **36 generators** — sine plasma, tunnels, flow fields, kaleidoscope,
+  metaballs, voronoi, moire, audio rings, starfield, warp grids, Lissajous
+  scope, spectrum bars, colour bars, rotozoom, fire, copper bars, twister,
+  Mandelbrot, Julia, raymarched torus, Truchet, hex grid, spirals,
+  phyllotaxis, interference, cylinder, Sierpinski, perspective floor, mandala,
+  lightning, clouds, wormhole, bobs — plus stateful simulations:
+  **reaction-diffusion** (Gray-Scott), **spiral waves** (Greenberg-Hastings
+  excitable medium) and **curl-noise smoke**.
+- **3-layer compositor** — each layer runs any generator with its own knobs,
+  per-layer transform (zoom / rotate / pan), blend mode and opacity.
+- **Effect chain** — video **feedback** (infinite-zoom trails), **mirror /
+  kaleidoscope**, **hue-cycle**, **lo-fi** (pixelate + posterize), analog
+  **VHS** (aberration / chroma bleed / scanlines / tape noise / tracking /
+  vignette), **glitch / datamosh** (slice displacement, RGB desync, block
+  compression, dropouts, bitcrush) and **bloom**.
+- **Modulation matrix** — a grid patchbay routing audio bands, the onset, the
+  beat-clock phase and **six tempo-synced LFOs** (nine waveforms each) onto any
+  parameter, with per-route depth and smoothing.
+- **Lettering bank** — eight MIDI-triggerable text slots, multiple baked pixel
+  fonts (system / bold / outline / alien) and text FX (dissolve / wave / tear /
+  scanlines).
+- **Presets** — curated builtins embedded in the binary, save/recall in the
+  browser, autoloads the last one on launch.
+- **Beat clock** — free-running tempo that locks to incoming MIDI clock.
 
 ## Control
 
-- **MIDI** in (notes, CC, clock) via the system MIDI stack.
-- **OSC** over UDP.
-- **Web UI** served by the binary itself: a websocket pub/sub channel carrying
-  protobuf-encoded messages, with a control surface in the browser.
+- **Web UI** — served by the binary at `http://<host>:8080`; a live control
+  surface with master + blackout, per-layer decks, the effects rack, the
+  modulation grid, LFO scopes and the preset/lettering panels. Two-way synced
+  over a websocket (protobuf), so MIDI/OSC moves show up there too.
+- **MIDI** — notes, CC and clock; opens a **virtual port** ("audiovis") so a
+  DAW or sequencer can drive it, and auto-connects hardware ports. Per-control
+  **learn**.
+- **OSC** — over UDP; `/p/<param.path> <value>` sets any parameter directly,
+  any other address is learnable.
 
-## Building
+## Build
 
 ```sh
 cargo build --release
 ```
 
-The optional camera / video-file input layer is behind a feature flag:
+The optional camera / video input layer is behind a feature flag:
 
 ```sh
 cargo build --release --features camera
 ```
 
-## Running
+The release binary embeds the web UI and all assets — it is self-contained.
+
+## Run
 
 ```sh
-audiovis --backend auto --width 1280 --height 720 --fps 60
+audiovis                       # windowed, web UI on :8080
+audiovis --backend drm \       # headless on a Pi/C.H.I.P, straight to framebuffer
+  --width 1280 --height 720 --render-scale 0.5 --fps 30
 ```
 
-On a small board you will typically lower the cost:
-
-```sh
-audiovis --backend drm --width 1280 --height 720 --render-scale 0.5 --fps 30
-```
-
-Run `audiovis --help` for the full list of options. Every option also has an
-`AV_*` environment-variable equivalent.
-
-## Status
-
-Early development. See the milestones being built out in the source tree:
-core engine and control bus, GLES2 render pipeline, generator library, analog
-post chain, audio analysis, MIDI/OSC, web UI, and the Linux DRM backend.
+`audiovis --help` lists every option; each also has an `AV_*` environment
+equivalent.
 
 ## License
 

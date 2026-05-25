@@ -1,14 +1,8 @@
 {"version":1,"name":"vhs-dream","params":{
-  "layer.0.generator":{"type":"int","value":30},
-  "layer.0.opacity":{"type":"float","value":1.0},
-  "layer.0.scale":{"type":"float","value":1.2},
-  "post.vhs.enable":{"type":"bool","value":true},
-  "post.vhs.aberration":{"type":"float","value":0.6},
-  "post.vhs.bleed":{"type":"float","value":0.6},
-  "post.vhs.scanline":{"type":"float","value":0.5},
-  "post.vhs.noise":{"type":"float","value":0.3},
-  "post.vhs.wobble":{"type":"float","value":0.5},
-  "post.vhs.vignette":{"type":"float","value":0.6}
+ "layer.0.generator":{"type":"int","value":30},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.scale":{"type":"float","value":1.2},
+ "layer.1.generator":{"type":"int","value":15},"layer.1.opacity":{"type":"float","value":0.3},"layer.1.blend":{"type":"int","value":2},
+ "post.vhs.enable":{"type":"bool","value":true},"post.vhs.aberration":{"type":"float","value":0.6},"post.vhs.bleed":{"type":"float","value":0.6},"post.vhs.scanline":{"type":"float","value":0.5},"post.vhs.noise":{"type":"float","value":0.3},"post.vhs.wobble":{"type":"float","value":0.5},"post.vhs.vignette":{"type":"float","value":0.6}
 },"mappings":[],"mod_routes":[
-  {"source":"lfo.3","target":"post.vhs.wobble","amount":0.3,"smooth":0.0}
-]}
+ {"source":"lfo.3","target":"post.vhs.wobble","amount":0.3,"smooth":0.0},
+ {"source":"audio.mid","target":"layer.1.opacity","amount":0.4,"smooth":0.2}
+],"text":[]}

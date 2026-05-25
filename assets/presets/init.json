@@ -1,6 +1,9 @@
 {"version":1,"name":"init","params":{
-  "global.brightness":{"type":"float","value":1.0},
-  "layer.0.generator":{"type":"int","value":0},
-  "layer.0.opacity":{"type":"float","value":1.0},
-  "post.vhs.enable":{"type":"bool","value":true}
-},"mappings":[],"mod_routes":[]}
+ "global.brightness":{"type":"float","value":1.0},
+ "layer.0.generator":{"type":"int","value":0},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.warp":{"type":"float","value":0.3},
+ "layer.1.generator":{"type":"int","value":2},"layer.1.opacity":{"type":"float","value":0.25},"layer.1.blend":{"type":"int","value":2},"layer.1.scale":{"type":"float","value":1.6},
+ "post.vhs.enable":{"type":"bool","value":true}
+},"mappings":[],"mod_routes":[
+ {"source":"lfo.1","target":"layer.0.hue","amount":0.25,"smooth":0.0},
+ {"source":"audio.low","target":"layer.0.warp","amount":0.3,"smooth":0.3}
+],"text":[]}

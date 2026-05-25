@@ -1,11 +1,10 @@
 {"version":1,"name":"plasma-bloom","params":{
-  "layer.0.generator":{"type":"int","value":0},
-  "layer.0.opacity":{"type":"float","value":1.0},
-  "layer.0.warp":{"type":"float","value":0.5},
-  "post.bloom.enable":{"type":"bool","value":true},
-  "post.bloom.amount":{"type":"float","value":0.6},
-  "post.vhs.enable":{"type":"bool","value":true}
+ "layer.0.generator":{"type":"int","value":0},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.warp":{"type":"float","value":0.5},
+ "layer.1.generator":{"type":"int","value":4},"layer.1.opacity":{"type":"float","value":0.5},"layer.1.blend":{"type":"int","value":1},"layer.1.hue":{"type":"float","value":0.4},
+ "post.bloom.enable":{"type":"bool","value":true},"post.bloom.amount":{"type":"float","value":0.6},
+ "post.vhs.enable":{"type":"bool","value":true}
 },"mappings":[],"mod_routes":[
-  {"source":"lfo.2","target":"layer.0.hue","amount":0.5,"smooth":0.0},
-  {"source":"audio.mid","target":"layer.0.warp","amount":0.4,"smooth":0.2}
-]}
+ {"source":"lfo.2","target":"layer.0.hue","amount":0.5,"smooth":0.0},
+ {"source":"audio.mid","target":"layer.0.warp","amount":0.4,"smooth":0.2},
+ {"source":"audio.low","target":"layer.1.opacity","amount":0.5,"smooth":0.1}
+],"text":[]}
