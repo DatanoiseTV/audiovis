@@ -26,41 +26,61 @@ framebuffer — no X11, no Wayland, no pre-rendered clips.
 <tr>
 <td><img src="docs/img/neon-grid.png" width="200"><br><sub>neon-grid</sub></td>
 <td><img src="docs/img/reaction-bloom.png" width="200"><br><sub>reaction-bloom</sub></td>
-<td><img src="docs/img/plasma-bloom.png" width="200"><br><sub>plasma-bloom</sub></td>
-<td><img src="docs/img/vhs-dream.png" width="200"><br><sub>vhs-dream</sub></td>
+<td><img src="docs/img/prism-stack.png" width="200"><br><sub>prism-stack</sub></td>
+<td><img src="docs/img/wireframe-obj.png" width="200"><br><sub>wireframe-obj</sub></td>
 </tr>
 </table>
 
-*Sixteen builtin presets ship in the binary; the last-used one auto-loads on
+*Eighteen builtin presets ship in the binary; the last-used one auto-loads on
 launch. All frames here are generated live (no audio input).*
 
 ## Web control surface
 
 A dense, dark instrument surface served straight from the binary — a clip-style
-**media browser** that loads any image/SVG into the media decks, per-layer decks,
-the effects rack, audio analyzer, the I/O picker, the modulation grid and a
-**live output monitor** that floats over the page (drag it anywhere, resize it
-from the corner, fold it away). Everything is two-way synced over a protobuf
-websocket.
+**media browser**, a **dynamic layer stack** (add/remove generator layers), a
+**reorderable FX rack**, a **JS script editor**, the audio analyzer, the I/O
+picker, the modulation grid and a **live output monitor** that floats over the
+page (drag it anywhere, resize it from the corner, fold it away). Everything is
+two-way synced over a protobuf websocket.
 
 ![web UI](docs/img/webui.png)
 
 ## Generators
 
-38 of them — procedural fields, demoscene classics, fractals, a stereo scope, a
-morphing wireframe solid, and three living simulations (reaction-diffusion,
-spiral-wave excitable medium, curl-noise smoke). Each layer can run any of them.
+39 of them — procedural fields, demoscene classics, fractals, a stereo scope, a
+morphing wireframe solid (which can also load OBJ meshes), a JS-scripted pixel
+buffer, and three living simulations (reaction-diffusion, spiral-wave excitable
+medium, curl-noise smoke). The layer stack is dynamic — **add and remove
+generator layers** (up to eight), each running any generator.
 
 ![generators](docs/img/generators.png)
 
 ## Effect chain
 
-Composited layers run through a chain of toggleable, modulatable effects:
-**feedback** (infinite-zoom trails), **mirror / kaleidoscope**, **hue-cycle**,
-**lo-fi** (pixelate + posterize), analog **VHS**, **glitch / datamosh** and
-**bloom**.
+A **dynamic, reorderable FX rack**: add and remove effect instances, drag them
+up and down the chain, and run more than one of the same kind (e.g. two
+independent glitches). The effect types are **feedback** (infinite-zoom trails),
+**mirror / kaleidoscope**, **hue-cycle**, **lo-fi** (pixelate + posterize),
+analog **VHS**, **glitch / datamosh** and **bloom** — each toggleable and fully
+modulatable.
 
 ![effects](docs/img/fx.png)
+
+## Scripting
+
+An embedded **JavaScript runtime** (the pure-Rust `boa` engine) runs a script
+every frame with the live signals in scope — audio bands, RMS, onset, beat /
+bar / bpm, LFOs and time — and can drive any parameter (`set` / `setn` / `get` /
+`trigger`) or draw into a 2D pixel buffer (`clear` / `pset` / `line` / `rect`)
+shown by the *script* generator. Edit, run (Cmd/Ctrl-Enter), save and load
+scripts from the web UI; example scripts ship in the binary. Compile it out with
+`--no-default-features` for the leanest ARM build.
+
+## Wireframe meshes
+
+The wireframe generator morphs procedural solids, or **loads OBJ models** from a
+`meshes/` folder and draws them as rotating, hue-tinted wireframes — pick a mesh
+from the dropdown, drop your own `.obj` in and Rescan.
 
 ## Media layers
 
@@ -109,6 +129,9 @@ pixel fonts and text FX (dissolve / wave / tear / scanlines) — round it out.
 ```sh
 cargo build --release        # self-contained binary (web UI + assets embedded)
 ./target/release/audiovis    # windowed, web UI on :8080
+
+# leanest binary for tiny ARM (drops the embedded JS scripting runtime):
+cargo build --release --no-default-features
 
 # headless on a Pi / C.H.I.P., straight to the framebuffer:
 audiovis --backend drm --width 1280 --height 720 --render-scale 0.5 --fps 30

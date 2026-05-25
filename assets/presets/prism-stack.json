@@ -1,0 +1,28 @@
+{
+ "version": 1,
+ "name": "prism-stack",
+ "params": {
+  "layer.0.generator": { "type": "int", "value": 0 },
+  "layer.0.opacity": { "type": "float", "value": 1.0 },
+  "layer.0.scale": { "type": "float", "value": 1.3 },
+  "layer.0.hue": { "type": "float", "value": 0.6 },
+  "layer.1.generator": { "type": "int", "value": 3 },
+  "layer.1.opacity": { "type": "float", "value": 0.6 },
+  "layer.1.blend": { "type": "int", "value": 1 },
+  "layer.1.hue": { "type": "float", "value": 0.0 },
+  "layer.2.generator": { "type": "int", "value": 7 },
+  "layer.2.opacity": { "type": "float", "value": 0.45 },
+  "layer.2.blend": { "type": "int", "value": 2 },
+  "layer.2.hue": { "type": "float", "value": 0.3 },
+  "post.bloom.enable": { "type": "bool", "value": true },
+  "post.bloom.amount": { "type": "float", "value": 0.4 },
+  "post.vhs.enable": { "type": "bool", "value": true },
+  "post.vhs.aberration": { "type": "float", "value": 0.25 }
+ },
+ "mappings": [],
+ "mod_routes": [
+  { "source": "lfo.2", "target": "layer.1.rotate", "amount": 0.3, "smooth": 0.0 },
+  { "source": "audio.mid", "target": "layer.2.opacity", "amount": 0.4, "smooth": 0.2 },
+  { "source": "audio.high", "target": "post.bloom.amount", "amount": 0.4, "smooth": 0.15 }
+ ]
+}
