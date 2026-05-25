@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-31";
+const UI_BUILD = "ui-32";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -47,6 +47,7 @@ let scriptNames = [];        // available script names (builtins + user)
 let layerCards = {};         // layer index -> its card element (dynamic stack)
 const MAX_LAYERS = 8;        // must match the compositor's NUM_LAYERS
 let fxCards = [];            // {card, enablePath, orderPath, name, pos} per FX instance
+let lfoCards = [];           // {card, enablePath, canvas} per LFO
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
@@ -213,7 +214,8 @@ function groupOrder(name) {
   if (name.startsWith("Media")) return 5 + (parseInt(name.replace(/\D/g, ""), 10) || 0);
   const fx = FX_GROUPS.indexOf(name);
   if (fx >= 0) return 10 + fx;
-  return { Audio: 28, LFO: 30, Clock: 31, Global: 32, Text: 33 }[name] ?? 40;
+  if (name.startsWith("LFO ")) return 35 + (parseInt(name.replace(/\D/g, ""), 10) || 0);
+  return { Audio: 28, Clock: 31, Global: 32, Text: 33 }[name] ?? 40;
 }
 
 function buildUI(schema) {
@@ -247,6 +249,13 @@ function buildUI(schema) {
   const fxBody = el("div", "rackbody");
   fxRack.appendChild(fxBody);
   main.appendChild(fxRack);
+
+  const lfoRack = el("div", "group matrix rack");
+  lfoRack.appendChild(el("h2", null, "LFOs"));
+  const lfoBody = el("div", "rackbody");
+  lfoRack.appendChild(lfoBody);
+  main.appendChild(lfoRack);
+  lfoCards = [];
 
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
@@ -289,13 +298,37 @@ function buildUI(schema) {
       rm.onclick = (e) => { e.stopPropagation(); removeFx(enablePath); };
       const grp = el("span", "fxhdr"); grp.append(up, dn, rm); h.appendChild(grp);
     }
+    // LFOs are a dynamic pool too: enable shows the LFO and feeds it as a
+    // source; the card carries a live scope and a remove (x).
+    const lfoM = name.match(/^LFO (\d+)$/);
+    if (lfoM) {
+      const n = parseInt(lfoM[1], 10);
+      const enablePath = `lfo.${n}.enable`;
+      skip = new Set([enablePath]);
+      sec.dataset.lfo = enablePath;
+      const rm = el("button", "btn rmlayer", "×"); rm.title = "remove this LFO";
+      rm.onclick = (e) => { e.stopPropagation(); removeLfo(enablePath); };
+      h.appendChild(rm);
+      const cv = el("canvas"); cv.width = 250; cv.height = 46; cv.id = `lfoscope-${n}`; cv.className = "lfocanvas";
+      lfoCards.push({ card: sec, enablePath, canvas: cv });
+      sec._lfoCanvas = cv;
+    }
+
     for (const spec of specs) { if (!skip || !skip.has(spec.path)) sec.appendChild(buildRow(spec)); }
-    if (name === "LFO") sec.appendChild(buildLfoScopes());
-    // Route layer/FX cards into their racks; everything else flows below.
+    if (sec._lfoCanvas) sec.appendChild(sec._lfoCanvas);
+    // Route layer/FX/LFO cards into their racks; everything else flows below.
     if (lm) layersBody.appendChild(sec);
     else if (fxEnable) fxBody.appendChild(sec);
+    else if (lfoM) lfoBody.appendChild(sec);
     else main.appendChild(sec);
   }
+
+  const addLfoTile = el("button", "addtile");
+  addLfoTile.id = "addlfo";
+  addLfoTile.textContent = "+ Add LFO";
+  addLfoTile.onclick = () => addLfo();
+  lfoBody.appendChild(addLfoTile);
+  refreshLfos();
 
   // Inline add tiles at the end of each rack.
   const addLayerTile = el("button", "addtile");
@@ -433,17 +466,29 @@ function renderFxAdd() {
   }
 }
 
-// --- live LFO shape previews ---
+// --- dynamic LFO pool (add / remove) ---
 
-function buildLfoScopes() {
-  const wrap = el("div", "lfoscopes");
-  for (let n = 1; n <= 6; n++) {
-    const box = el("div", "lfobox");
-    const cv = el("canvas"); cv.width = 150; cv.height = 46; cv.id = `lfoscope-${n}`;
-    box.append(el("span", "lfol", `lfo ${n}`), cv);
-    wrap.appendChild(box);
-  }
-  return wrap;
+const lfoEnabled = (c) => { const v = paramValues.get(c.enablePath); return !!v && v.value >= 0.5; };
+
+function refreshLfos() {
+  let active = 0;
+  for (const c of lfoCards) { const on = lfoEnabled(c); c.card.style.display = on ? "" : "none"; if (on) active++; }
+  const add = document.getElementById("addlfo");
+  if (add) add.disabled = active >= lfoCards.length;
+}
+
+function addLfo() {
+  const free = lfoCards.find((c) => !lfoEnabled(c));
+  if (!free) return;
+  sendRaw(free.enablePath, 1);
+  paramValues.set(free.enablePath, { value: 1, norm: 1 });
+  refreshLfos();
+}
+
+function removeLfo(enablePath) {
+  sendRaw(enablePath, 0);
+  paramValues.set(enablePath, { value: 0, norm: 0 });
+  refreshLfos();
 }
 
 // One LFO sample, matching the Rust lfo() (sine, tri, saw up/dn, square, pulse,
@@ -467,9 +512,10 @@ function lfoValue(shape, phase) {
 function drawLfos() {
   requestAnimationFrame(drawLfos);
   const beats = latestTelemetry ? latestTelemetry.beats || 0 : 0;
-  for (let n = 1; n <= 6; n++) {
-    const cv = document.getElementById(`lfoscope-${n}`);
-    if (!cv) continue;
+  for (const c of lfoCards) {
+    if (c.card.style.display === "none") continue;
+    const cv = c.canvas;
+    const n = parseInt(c.enablePath.split(".")[1], 10);
     const ctx = cv.getContext("2d");
     const w = cv.width, h = cv.height, mid = h / 2;
     const div = DIV_BEATS[Math.round(paramValues.get(`lfo.${n}.div`)?.value ?? 3)] || 4;
@@ -1155,6 +1201,8 @@ function applyChange(c) {
   if (/^layer\.\d+\.opacity$/.test(c.path)) refreshLayers();
   // An FX enable/order arriving (e.g. from a preset) updates the chain view.
   if (/^post\..*\.(enable|order)$/.test(c.path)) refreshFx();
+  // An LFO enable arriving updates the LFO rack.
+  if (/^lfo\.\d+\.enable$/.test(c.path)) refreshLfos();
 }
 
 function applyTelemetry(t) {

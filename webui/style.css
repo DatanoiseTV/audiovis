@@ -140,6 +140,7 @@ select, input[type=text] {
 .lfobox { display: flex; flex-direction: column; gap: 2px; }
 .lfol { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
 .lfobox canvas { background: #0e0e15; border: 1px solid var(--line); border-radius: 3px; display: block; }
+.lfocanvas { width: 100%; height: 46px; margin-top: 8px; background: #0e0e15; border: 1px solid var(--line2); border-radius: 4px; display: block; image-rendering: pixelated; }
 
 /* --- group accents: layers cyan, effects magenta --- */
 .group.layer { border-color: rgba(53, 224, 216, 0.3); }

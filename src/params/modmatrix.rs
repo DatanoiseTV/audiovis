@@ -25,6 +25,8 @@ pub const MOD_SOURCES: &[&str] = &[
     "lfo.4",
     "lfo.5",
     "lfo.6",
+    "lfo.7",
+    "lfo.8",
 ];
 
 /// One modulation route.

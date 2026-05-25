@@ -551,14 +551,21 @@ fn build_mod_sources(engine: &Engine, low: f32, mid: f32, high: f32, rms: f32, b
     s.insert("clock.beat".into(), read("clock.beat"));
     s.insert("clock.bar".into(), read("clock.bar"));
 
-    // LFOs run off the musical position so they stay locked to the measure.
+    // LFOs run off the musical position so they stay locked to the measure. A
+    // disabled LFO contributes nothing (its source value is 0).
     let beats = engine.musical_beats();
-    for n in 1..=6 {
-        let div_idx = p.id_of(&format!("lfo.{n}.div")).map(|id| p.get(id).as_i64()).unwrap_or(3);
-        let shape = p.id_of(&format!("lfo.{n}.shape")).map(|id| p.get(id).as_i64()).unwrap_or(0);
-        let bpc = LFO_DIVISIONS.get(div_idx as usize).copied().unwrap_or(4.0) as f64;
-        let phase = (beats / bpc) as f32;
-        s.insert(format!("lfo.{n}"), lfo(shape, phase));
+    for n in 1..=8 {
+        let enabled = p.id_of(&format!("lfo.{n}.enable")).map(|id| p.get_bool(id)).unwrap_or(false);
+        let value = if enabled {
+            let div_idx = p.id_of(&format!("lfo.{n}.div")).map(|id| p.get(id).as_i64()).unwrap_or(3);
+            let shape = p.id_of(&format!("lfo.{n}.shape")).map(|id| p.get(id).as_i64()).unwrap_or(0);
+            let bpc = LFO_DIVISIONS.get(div_idx as usize).copied().unwrap_or(4.0) as f64;
+            let phase = (beats / bpc) as f32;
+            lfo(shape, phase)
+        } else {
+            0.0
+        };
+        s.insert(format!("lfo.{n}"), value);
     }
     s
 }
