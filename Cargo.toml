@@ -53,6 +53,7 @@ futures-util = "0.3"
 prost = "0.13"
 rust-embed = { version = "8", features = ["mime-guess"] }
 font8x8 = "0.3.1"
+fontdue = "0.9.3"
 
 [build-dependencies]
 # Pure-Rust protobuf compilation: no system `protoc` needed.

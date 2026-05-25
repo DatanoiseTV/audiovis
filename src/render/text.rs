@@ -12,10 +12,21 @@ use crate::engine::Engine;
 
 use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, Program};
 
-const ATLAS: i32 = 128; // 16 cols * 8px
+const ATLAS: i32 = 128; // 16 cols * 8px (bitmap fonts)
+const TTF_CELL: i32 = 16;
+const TTF_ATLAS: i32 = TTF_CELL * 16; // 256
+
+/// Real pixel typefaces (OFL), rasterized into atlases at startup, with the
+/// raster px size tuned to each face's design size.
+const TTF_FONTS: &[(&[u8], f32)] = &[
+    (include_bytes!("../../assets/fonts/vt323.ttf"), 16.0),
+    (include_bytes!("../../assets/fonts/silkscreen.ttf"), 11.0),
+    (include_bytes!("../../assets/fonts/pressstart.ttf"), 10.0),
+];
 
 /// Font styles, selected by the `text.font` param. Names mirror the UI dropdown.
-pub const FONT_NAMES: &[&str] = &["system", "bold", "outline", "alien"];
+/// First four are the font8x8 bitmap set; the rest are rasterized TTFs.
+pub const FONT_NAMES: &[&str] = &["system", "bold", "outline", "alien", "vt323", "silkscreen", "arcade"];
 
 pub struct TextOverlay {
     gl: Gl,
@@ -92,9 +103,43 @@ fn bake(gl: &Gl, style: usize) -> glow::Texture {
     gl::make_texture(gl, ATLAS, ATLAS, Some(&atlas), true)
 }
 
+/// Rasterize a TTF into a 256x256 atlas (16px cells), one ASCII glyph per cell,
+/// centred and thresholded for a crisp pixel look. The shader samples cells in
+/// normalised space, so the larger atlas mixes freely with the bitmap fonts.
+fn bake_ttf(gl: &Gl, bytes: &[u8], px: f32) -> glow::Texture {
+    let dim = TTF_ATLAS;
+    let mut atlas = vec![0u8; (dim * dim * 4) as usize];
+    if let Ok(font) = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()) {
+        for c in 32u8..127 {
+            let (m, bm) = font.rasterize(c as char, px);
+            let cell = TTF_CELL;
+            let cx = (c as i32 % 16) * cell;
+            let cy = (c as i32 / 16) * cell;
+            let ox = cx + ((cell - m.width as i32) / 2).max(0);
+            let oy = cy + ((cell - m.height as i32) / 2).max(0);
+            for gy in 0..m.height {
+                for gx in 0..m.width {
+                    if bm[gy * m.width + gx] > 110 {
+                        let (x, y) = (ox + gx as i32, oy + gy as i32);
+                        if x >= cx && x < cx + cell && y >= cy && y < cy + cell {
+                            let o = ((y * dim + x) * 4) as usize;
+                            atlas[o..o + 4].copy_from_slice(&[255, 255, 255, 255]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    gl::make_texture(gl, dim, dim, Some(&atlas), true)
+}
+
 impl TextOverlay {
     pub fn new(gl: &Gl, flavor: GlslFlavor) -> Result<Self, String> {
-        let fonts = (0..FONT_NAMES.len()).map(|s| bake(gl, s)).collect();
+        // Four bitmap styles, then the rasterized TTF faces.
+        let mut fonts: Vec<glow::Texture> = (0..4).map(|s| bake(gl, s)).collect();
+        for (bytes, px) in TTF_FONTS {
+            fonts.push(bake_ttf(gl, bytes, *px));
+        }
         let code_tex = gl::make_texture(gl, 1, 1, None, true);
 
         let lib = include_str!("shaders/lib.glsl");

@@ -8,13 +8,13 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-16";
+const UI_BUILD = "ui-17";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
 const DIV_NAMES = ["8 bars", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"];
 const SHAPE_NAMES = ["sine", "triangle", "saw up", "saw dn", "square", "pulse", "rand", "noise", "steps"];
-const FONT_NAMES = ["system", "bold", "outline", "alien"];
+const FONT_NAMES = ["system", "bold", "outline", "alien", "vt323", "silkscreen", "arcade"];
 const TEXTFX_NAMES = ["none", "dissolve", "wave", "tear", "scanlines"];
 
 // Named option lists for integer params that read better as dropdowns.
