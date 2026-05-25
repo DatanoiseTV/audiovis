@@ -118,6 +118,11 @@ impl Pipeline {
         self.compositor.media_names()
     }
 
+    /// Dropdown labels for the wireframe mesh source (index 0 = procedural).
+    pub fn mesh_names(&self) -> Vec<String> {
+        self.compositor.mesh_names()
+    }
+
     /// Re-scan the media directory (picks up newly added files).
     pub fn rescan_media(&mut self) {
         self.compositor.rescan_media();

@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-28";
+const UI_BUILD = "ui-29";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -21,6 +21,7 @@ const TEXTFX_NAMES = ["none", "dissolve", "wave", "tear", "scanlines"];
 function intOptions(path) {
   if (path.endsWith(".generator")) return generators;
   if (path.endsWith(".source")) return mediaFiles;
+  if (path === "wire.mesh") return meshNames;
   if (path.endsWith(".blend")) return BLEND_NAMES;
   if (path.endsWith(".div")) return DIV_NAMES;
   if (path.endsWith(".shape")) return SHAPE_NAMES;
@@ -37,6 +38,7 @@ const specsByPath = new Map();
 const paramValues = new Map(); // path -> { value, norm }, latest known
 let generators = [];
 let mediaFiles = ["(none)"];
+let meshNames = ["(shapes)"];
 let modSources = [];
 let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
 let mediaSourceSelects = []; // {sel, fill} for live source-dropdown refresh
@@ -143,11 +145,13 @@ function connect() {
       if (msg.schema && msg.schema.length) {
         generators = msg.generators || [];
         if (msg.media && msg.media.length) mediaFiles = msg.media;
+        if (msg.meshes && msg.meshes.length) meshNames = msg.meshes;
         if (msg.mod_sources && msg.mod_sources.length) modSources = msg.mod_sources;
         buildUI(msg.schema);
       } else if (msg.media && msg.media.length) {
         // media-only update (a rescan picked up new files)
         mediaFiles = msg.media;
+        if (msg.meshes && msg.meshes.length) meshNames = msg.meshes;
         onMediaListChanged();
       }
       if (msg.changes) for (const c of msg.changes) applyChange(c);
@@ -676,8 +680,8 @@ function buildRow(spec) {
     sel.onchange = () => sendRaw(spec.path, parseInt(sel.value, 10));
     mid.appendChild(sel);
     val.style.display = "none";
-    // Media source dropdowns are refreshed live when the file list changes.
-    if (spec.path.endsWith(".source")) mediaSourceSelects.push({ sel, fill });
+    // Media/mesh dropdowns are refreshed live when their file list changes.
+    if (spec.path.endsWith(".source") || spec.path === "wire.mesh") mediaSourceSelects.push({ sel, fill });
     widget = { set: (v) => { sel.value = Math.round(v); } };
   } else {
     // float or generic int: a normalised slider, value display shows raw.

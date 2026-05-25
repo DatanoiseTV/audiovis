@@ -93,6 +93,8 @@ message ServerMsg {
   bool script_present = 22;
   string script_error = 23;
   bool script_error_present = 24;
+  // Mesh file labels for the wireframe generator's mesh dropdown (0 = shapes).
+  repeated string meshes = 25;
 }
 
 // --- Client -> server ---

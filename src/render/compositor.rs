@@ -12,6 +12,7 @@ use crate::params::{ParamId, ParamKind, ParamSpec};
 use super::generators::{CommonUniforms, GeneratorBank};
 use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program, RenderTexture};
 use super::media::MediaBank;
+use super::mesh::MeshBank;
 use super::sim::SimBank;
 
 /// How many generator layer slots the stack exposes. The web UI presents these
@@ -45,6 +46,8 @@ pub struct Compositor {
     sim_bank: SimBank,
     /// Image/SVG input layers, blended over the generator stack.
     media: MediaBank,
+    /// OBJ wireframe meshes for the wireframe generator.
+    mesh: MeshBank,
     layer_targets: Vec<RenderTexture>,
     /// Per-layer simulation state, allocated lazily the first time a layer runs
     /// a stateful generator (so a stack of mostly-stateless layers stays cheap).
@@ -70,6 +73,7 @@ impl Compositor {
         let bank = GeneratorBank::new(gl, flavor)?;
         let sim_bank = SimBank::new(gl, flavor)?;
         let media = MediaBank::new(gl, flavor, engine)?;
+        let mesh = MeshBank::new(gl, flavor, engine)?;
         // Generators and simulations share one index space.
         let gen_max = (bank.len() + sim_bank.len()).saturating_sub(1) as i64;
 
@@ -132,6 +136,7 @@ impl Compositor {
             bank,
             sim_bank,
             media,
+            mesh,
             layer_targets,
             state,
             last_gen: vec![-1; NUM_LAYERS],
@@ -222,10 +227,15 @@ impl Compositor {
             let stateless = self.bank.len();
             if gen < stateless {
                 self.layer_targets[i].bind_as_target();
-                // The script generator samples the script pixel buffer; every
-                // other generator that wants a texture gets the waveform.
-                let aux = if GeneratorBank::name(gen) == "script" { self.script_tex } else { self.wave_tex };
-                self.bank.draw(gen, quad, &u, aux.unwrap_or(self.layer_targets[i].texture()));
+                if GeneratorBank::name(gen) == "wireframe" && self.mesh.active(engine) {
+                    // Wireframe generator with an OBJ selected: draw geometry.
+                    self.mesh.render(engine, time, u.hue, u.p1, self.audio.0, res);
+                } else {
+                    // The script generator samples the script pixel buffer; every
+                    // other generator that wants a texture gets the waveform.
+                    let aux = if GeneratorBank::name(gen) == "script" { self.script_tex } else { self.wave_tex };
+                    self.bank.draw(gen, quad, &u, aux.unwrap_or(self.layer_targets[i].texture()));
+                }
                 self.last_gen[i] = gen as i64;
             } else {
                 // Stateful simulation: (re)seed on selection, step, then render.
@@ -280,8 +290,14 @@ impl Compositor {
         self.media.names().to_vec()
     }
 
-    /// Re-scan the media directory (picks up newly added files).
+    /// Dropdown labels for the wireframe mesh source (index 0 = procedural).
+    pub fn mesh_names(&self) -> Vec<String> {
+        self.mesh.names().to_vec()
+    }
+
+    /// Re-scan the media + mesh directories (picks up newly added files).
     pub fn rescan_media(&mut self) {
         self.media.rescan();
+        self.mesh.rescan();
     }
 }

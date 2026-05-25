@@ -193,7 +193,7 @@ impl WindowApp {
             // Generators and simulations share the layer.N.generator index space.
             let mut generators: Vec<String> = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
             generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
-            web.set_schema(&self.engine, generators, pipeline.media_names());
+            web.set_schema(&self.engine, generators, pipeline.media_names(), pipeline.mesh_names());
             web.publish_presets(self.presets.list(), &self.current_preset);
             web.publish_text(self.engine.text_slots());
             web.publish_mappings(self.engine.mappings_list());
@@ -287,9 +287,10 @@ impl WindowApp {
                     if let Some(gfx) = self.gfx.as_mut() {
                         gfx.pipeline.rescan_media();
                         let names = gfx.pipeline.media_names();
-                        tracing::info!("rescanned media: {} file(s)", names.len().saturating_sub(1));
+                        let meshes = gfx.pipeline.mesh_names();
+                        tracing::info!("rescanned media: {} file(s), {} mesh(es)", names.len().saturating_sub(1), meshes.len().saturating_sub(1));
                         if let Some(web) = &self.web {
-                            web.publish_media(names);
+                            web.publish_media(names, meshes);
                         }
                     }
                 }
