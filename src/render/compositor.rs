@@ -11,6 +11,7 @@ use crate::params::{ParamId, ParamKind, ParamSpec};
 
 use super::generators::{CommonUniforms, GeneratorBank};
 use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program, RenderTexture};
+use super::media::MediaBank;
 use super::sim::SimBank;
 
 /// How many layers the stack exposes. Three is a good live balance: a base, a
@@ -41,6 +42,8 @@ pub struct Compositor {
     gl: Gl,
     bank: GeneratorBank,
     sim_bank: SimBank,
+    /// Image/SVG input layers, blended over the generator stack.
+    media: MediaBank,
     layer_targets: Vec<RenderTexture>,
     /// Per-layer simulation state (only used while a layer runs a stateful gen).
     state: Vec<PingPong>,
@@ -62,6 +65,7 @@ impl Compositor {
     pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, width: i32, height: i32) -> Result<Self, String> {
         let bank = GeneratorBank::new(gl, flavor)?;
         let sim_bank = SimBank::new(gl, flavor)?;
+        let media = MediaBank::new(gl, flavor, engine)?;
         // Generators and simulations share one index space.
         let gen_max = (bank.len() + sim_bank.len()).saturating_sub(1) as i64;
 
@@ -129,6 +133,7 @@ impl Compositor {
             gl: gl.clone(),
             bank,
             sim_bank,
+            media,
             layer_targets,
             state,
             last_gen: vec![-1; NUM_LAYERS],
@@ -255,6 +260,14 @@ impl Compositor {
             quad.draw();
             self.acc.swap();
         }
+
+        // 3. Blend the media (image/SVG) layers on top of the generator stack.
+        self.media.render(quad, engine, &mut self.acc, self.width, self.height);
         // The composited frame now sits in `self.acc.read()` (see `result`).
+    }
+
+    /// Dropdown labels for the media source params (index 0 = none).
+    pub fn media_names(&self) -> Vec<String> {
+        self.media.names().to_vec()
     }
 }

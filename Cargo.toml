@@ -1,6 +1,6 @@
 [package]
 name = "audiovis"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.82"
 description = "Live audio-reactive VJ visualizer with VHS / analog-video aesthetics, controllable over MIDI, OSC and a web UI"
@@ -54,6 +54,12 @@ prost = "0.13"
 rust-embed = { version = "8", features = ["mime-guess"] }
 font8x8 = "0.3.1"
 fontdue = "0.9.3"
+jpeg-encoder = "0.6.1"
+
+# Media input layers: raster decode (PNG/JPEG) and SVG rasterisation. Used only
+# when a media layer loads a file, so the cost is one-off at load time.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+resvg = { version = "0.44", default-features = false }
 
 [build-dependencies]
 # Pure-Rust protobuf compilation: no system `protoc` needed.

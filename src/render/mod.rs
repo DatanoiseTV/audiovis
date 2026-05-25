@@ -8,6 +8,7 @@ pub mod backend;
 pub mod compositor;
 pub mod generators;
 pub mod gl;
+pub mod media;
 pub mod pipeline;
 pub mod post;
 pub mod sim;
