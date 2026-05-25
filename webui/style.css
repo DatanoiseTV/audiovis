@@ -175,3 +175,19 @@ select, .row .name { font-size: 13px; }
 .lfobox canvas { image-rendering: pixelated; }
 /* faint CRT scanline wash over the header */
 header { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px); }
+
+/* --- collapsible groups --- */
+.group h2 { cursor: pointer; user-select: none; }
+.group h2::before { content: "\25BE  "; color: var(--text-dim); font-size: 11px; }
+.group.collapsed h2::before { content: "\25B8  "; }
+.group.collapsed > *:not(h2) { display: none; }
+
+/* --- MIDI / OSC map list --- */
+.hint { color: var(--text-dim); font-size: 11px; margin-bottom: 8px; }
+.maplist { display: flex; flex-direction: column; gap: 6px; }
+.maprow { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center; padding: 5px 8px; background: #1a1a24; border: 1px solid var(--line); border-radius: 3px; }
+.maprow .src { color: var(--amber); font-family: var(--mono); font-size: 12px; }
+.maprow .rlabel { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* lettering row now: input + hold + learn */
+.textrow { grid-template-columns: 1fr auto auto; }

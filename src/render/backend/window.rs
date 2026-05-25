@@ -164,6 +164,7 @@ impl WindowApp {
             web.set_schema(&self.engine, generators);
             web.publish_presets(self.presets.list(), &self.current_preset);
             web.publish_text(self.engine.text_slots());
+            web.publish_mappings(self.engine.mappings_list());
         }
 
         tracing::info!("window backend up: {}x{} GL 3.3 Core via {}", w, h, renderer_name(&gl));
@@ -250,6 +251,7 @@ impl WindowApp {
                 web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0), read("clock.bar", 0.0), self.engine.musical_beats() as f32);
                 web.publish_mod_routes(&self.engine);
                 web.publish_text(self.engine.text_slots());
+                web.publish_mappings(self.engine.mappings_list());
             }
         }
 

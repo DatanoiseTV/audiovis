@@ -19,6 +19,17 @@ pub enum SourceKey {
     Osc { addr: String },
 }
 
+impl SourceKey {
+    /// Short human label for the UI, e.g. "CC1.7", "Note1.60", "/osc/addr".
+    pub fn desc(&self) -> String {
+        match self {
+            SourceKey::MidiCc { channel, cc } => format!("CC{}.{}", channel + 1, cc),
+            SourceKey::MidiNote { channel, note } => format!("Note{}.{}", channel + 1, note),
+            SourceKey::Osc { addr } => addr.clone(),
+        }
+    }
+}
+
 /// How an incoming control value is interpreted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +43,9 @@ pub enum MapMode {
     Toggle,
     /// A press fires a momentary trigger.
     Trigger,
+    /// Held: press acts (show/on), release un-acts (hide/off). For notes this
+    /// gives note-on/note-off gating - e.g. text shown only while held.
+    Gate,
 }
 
 /// Response curve applied to the normalised input before remapping.
@@ -99,6 +113,8 @@ pub enum MapAction {
     Toggle { target: String },
     /// Fire the target trigger parameter.
     Trigger { target: String },
+    /// Release a gated target (note-off): hide/turn off.
+    Release { target: String },
     /// Nothing to do (e.g. a note-off for a non-toggle binding).
     None,
 }
@@ -133,6 +149,13 @@ impl Mapping {
                     MapAction::Trigger { target: self.target.clone() }
                 } else {
                     MapAction::None
+                }
+            }
+            MapMode::Gate => {
+                if pressed {
+                    MapAction::Trigger { target: self.target.clone() }
+                } else {
+                    MapAction::Release { target: self.target.clone() }
                 }
             }
         }
