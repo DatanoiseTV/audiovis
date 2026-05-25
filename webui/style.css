@@ -191,3 +191,94 @@ header { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1p
 
 /* lettering row now: input + hold + learn */
 .textrow { grid-template-columns: 1fr auto auto; }
+
+/* ============================================================
+   THEME REVAMP - refined instrument look (overrides above)
+   ============================================================ */
+:root {
+  --bg0: #07070c;
+  --bg1: #0d0d15;
+  --card0: #14141f;
+  --card1: #101019;
+  --line2: #2c2c3c;
+  --glow-cyan: 0 0 10px rgba(53,224,216,0.45);
+  --glow-mag: 0 0 10px rgba(255,62,165,0.45);
+}
+
+body {
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(53,224,216,0.06), transparent 60%),
+    radial-gradient(900px 600px at 90% 110%, rgba(255,62,165,0.05), transparent 60%),
+    var(--bg0);
+  font-size: 12.5px;
+}
+
+/* layout: centred, breathing, denser auto grid */
+main { max-width: 1500px; margin: 0 auto; padding: 18px; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; }
+
+/* cards */
+.group {
+  background: linear-gradient(180deg, var(--card0), var(--card1));
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px rgba(0,0,0,0.35);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.group:hover { border-color: #3a3a50; }
+.group.layer { box-shadow: 0 0 0 1px rgba(53,224,216,0.12) inset, 0 8px 24px rgba(0,0,0,0.35); }
+.group.fx { box-shadow: 0 0 0 1px rgba(255,62,165,0.10) inset, 0 8px 24px rgba(0,0,0,0.35); }
+h2 { font-size: 17px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line2);
+  display: flex; align-items: center; }
+
+/* sliders: slim track, glowing thumb */
+input[type=range] { height: 5px; background: linear-gradient(90deg, #1d1d2b, #25253a); border-radius: 4px; }
+input[type=range]::-webkit-slider-thumb { width: 13px; height: 13px; background: var(--cyan); box-shadow: var(--glow-cyan); border: none; transition: transform 0.1s; }
+input[type=range]::-webkit-slider-thumb:active { transform: scale(1.25); }
+input[type=range]::-moz-range-thumb { width: 13px; height: 13px; background: var(--cyan); box-shadow: var(--glow-cyan); border: none; }
+
+/* rows: tighter, hover highlight */
+.row { margin: 8px 0; gap: 10px; }
+.row .name { color: var(--text); opacity: 0.92; }
+.row .val { color: var(--cyan); text-shadow: var(--glow-cyan); }
+
+/* selects + text inputs */
+select, input[type=text] {
+  background: linear-gradient(180deg, #1c1c2a, #16161f);
+  border: 1px solid var(--line2); border-radius: 5px; padding: 5px 7px;
+  transition: border-color 0.12s;
+}
+select:hover, input[type=text]:focus, select:focus { border-color: var(--cyan); outline: none; }
+
+/* toggle */
+.toggle { width: 46px; height: 23px; border-radius: 12px; background: #1a1a26; border: 1px solid var(--line2); transition: all 0.15s; }
+.toggle .knob { width: 17px; height: 17px; transition: all 0.15s cubic-bezier(.4,1.4,.6,1); }
+.toggle.on { background: linear-gradient(90deg, rgba(53,224,216,0.18), rgba(53,224,216,0.3)); border-color: var(--cyan); box-shadow: var(--glow-cyan); }
+.toggle.on .knob { left: 25px; }
+
+/* buttons */
+.btn { background: linear-gradient(180deg, #20202e, #181822); border: 1px solid var(--line2); border-radius: 5px; padding: 5px 10px; transition: all 0.12s; }
+.btn:hover { border-color: var(--cyan); color: var(--text); box-shadow: var(--glow-cyan); }
+.btn.preset.active { box-shadow: var(--glow-cyan); }
+.btn.trigger { border-color: var(--magenta); color: var(--magenta); }
+.btn.trigger:hover { box-shadow: var(--glow-mag); }
+
+/* header: more presence */
+header { padding: 12px 18px; gap: 18px; border-bottom: 1px solid var(--line2);
+  background: linear-gradient(180deg, #15151f, #0a0a10); box-shadow: 0 4px 18px rgba(0,0,0,0.5); }
+.brand { font-size: 13px; }
+.brand b { color: var(--cyan); text-shadow: var(--glow-cyan); }
+.bpm { color: var(--magenta); text-shadow: var(--glow-mag); font-size: 14px; }
+.beatbar { height: 6px; }
+
+/* meters: glow */
+.meter .fill { box-shadow: 0 0 8px rgba(255,62,165,0.5); }
+
+/* matrix + map cards span full width with their own breathing room */
+.matrix { padding: 16px 18px; }
+.cell { border-radius: 3px; transition: border-color 0.1s; }
+.cell.on { box-shadow: var(--glow-cyan) inset; }
+
+/* lfo scopes a touch nicer */
+.lfobox canvas { border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,0.4) inset; }
