@@ -16,32 +16,72 @@ const VIRTUAL_PORT: &str = "audiovis";
 
 /// Holds the open connections alive; dropping it closes them.
 pub struct MidiInputs {
-    _conns: Vec<MidiInputConnection<()>>,
+    /// The virtual port (always open) plus any connected hardware ports.
+    _virtual: Option<MidiInputConnection<()>>,
+    hardware: Vec<MidiInputConnection<()>>,
+    tx: Sender<ControlEvent>,
+    /// The active hardware filter (empty = connect to all hardware ports).
+    filter: String,
 }
 
 impl MidiInputs {
     /// Open the virtual port plus hardware ports. `filter` empty connects to all
     /// hardware inputs; otherwise only ports whose name contains `filter`.
     pub fn start(filter: &str, tx: Sender<ControlEvent>) -> Self {
-        let mut conns = Vec::new();
-
-        match open_virtual(tx.clone()) {
+        let virt = match open_virtual(tx.clone()) {
             Ok(c) => {
                 tracing::info!("MIDI virtual input port '{VIRTUAL_PORT}' open");
-                conns.push(c);
+                Some(c)
             }
-            Err(e) => tracing::warn!("could not open virtual MIDI port: {e}"),
-        }
+            Err(e) => {
+                tracing::warn!("could not open virtual MIDI port: {e}");
+                None
+            }
+        };
 
-        match connect_hardware(filter, &tx) {
-            Ok(mut hw) => conns.append(&mut hw),
-            Err(e) => tracing::warn!("MIDI hardware scan failed: {e}"),
-        }
+        let hardware = match connect_hardware(filter, &tx) {
+            Ok(hw) => hw,
+            Err(e) => {
+                tracing::warn!("MIDI hardware scan failed: {e}");
+                Vec::new()
+            }
+        };
 
-        if conns.is_empty() {
+        if virt.is_none() && hardware.is_empty() {
             tracing::warn!("no MIDI inputs available");
         }
-        MidiInputs { _conns: conns }
+        MidiInputs { _virtual: virt, hardware, tx, filter: filter.to_string() }
+    }
+
+    /// List the available hardware input port names (skipping our virtual port).
+    pub fn list_ports() -> Vec<String> {
+        let mut names = Vec::new();
+        if let Ok(scan) = MidiInput::new(CLIENT) {
+            for port in scan.ports() {
+                if let Ok(name) = scan.port_name(&port) {
+                    if !name.contains(VIRTUAL_PORT) {
+                        names.push(name);
+                    }
+                }
+            }
+        }
+        names
+    }
+
+    /// The active hardware filter (empty = all ports).
+    pub fn current_filter(&self) -> &str {
+        &self.filter
+    }
+
+    /// Reconnect the hardware ports using a new filter, leaving the virtual port
+    /// untouched. Empty connects to all hardware inputs.
+    pub fn set_port(&mut self, filter: &str) {
+        self.hardware.clear(); // drop closes the old connections
+        self.filter = filter.to_string();
+        match connect_hardware(filter, &self.tx) {
+            Ok(hw) => self.hardware = hw,
+            Err(e) => tracing::warn!("MIDI reconnect failed: {e}"),
+        }
     }
 }
 

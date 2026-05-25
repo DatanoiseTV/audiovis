@@ -26,14 +26,14 @@ fn resolve(backend: Backend) -> Backend {
 
 /// Run the application to completion.
 pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
-    // Start audio capture before the render loop and keep it alive for the
-    // whole run; the renderer reads the shared feature block each frame.
+    // Start audio capture before the render loop. The window backend owns it
+    // for the run so it can switch the input device live; the renderer reads
+    // the shared feature block each frame.
     let audio = AudioEngine::start(&cli.audio_device, cli.audio_gain);
-    let audio_shared = audio.shared();
 
-    // Start control inputs. Each holds a sender onto the bus and stays alive
-    // for the run (the bindings own the OS connections/threads).
-    let _midi = MidiInputs::start(&cli.midi_port, bus.sender());
+    // Start control inputs. MIDI is handed to the backend so the device can be
+    // changed at runtime; OSC stays here for the run.
+    let midi = MidiInputs::start(&cli.midi_port, bus.sender());
     let _osc = if cli.osc_listen.is_empty() {
         None
     } else {
@@ -54,7 +54,7 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
     };
 
     match resolve(cli.backend) {
-        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio_shared, web),
+        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio, midi, web),
         Backend::Drm => {
             // Wired up in the Linux DRM/KMS milestone; until then, be explicit
             // rather than silently falling back.
