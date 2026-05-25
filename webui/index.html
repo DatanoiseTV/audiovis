@@ -9,6 +9,16 @@
 <body>
   <header>
     <div class="brand"><b>audio</b>vis</div>
+    <button class="btn blackout" id="blackout" title="kill output (space)">BLACKOUT</button>
+    <div class="masterwrap">
+      <label>MASTER</label>
+      <input type="range" id="master" min="0" max="1" step="0.001" value="1">
+    </div>
+    <div class="bpmwrap">
+      <span class="bpm" id="bpm">120 BPM</span>
+      <div class="beatbar"><div id="beatfill"></div></div>
+    </div>
+    <div class="spacer"></div>
     <div class="meters" id="meters">
       <div class="meter"><div class="bar"><div class="fill" id="m-low"></div></div><label>low</label></div>
       <div class="meter"><div class="bar"><div class="fill" id="m-mid"></div></div><label>mid</label></div>
@@ -16,8 +26,6 @@
       <div class="meter"><div class="bar"><div class="fill" id="m-rms"></div></div><label>rms</label></div>
       <div class="beatdot" id="beat" title="onset"></div>
     </div>
-    <div class="spacer"></div>
-    <div class="bpm" id="bpm">--- BPM</div>
     <div class="status"><span class="dot" id="dot"></span><span id="conn">connecting</span></div>
   </header>
 

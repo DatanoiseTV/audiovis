@@ -124,3 +124,25 @@ select, input[type=text] {
 .rng { display: flex; flex-direction: column; gap: 2px; flex: 1; max-width: 220px; }
 .rng .rngl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
 .empty { color: var(--text-dim); font-style: italic; padding: 6px; }
+
+/* --- transport header (live VJ controls) --- */
+.blackout { color: var(--amber); border-color: var(--amber); font-weight: 700; letter-spacing: 1px; }
+.blackout.active { background: var(--amber); color: #000; animation: pulse 0.6s infinite; }
+.masterwrap { display: flex; flex-direction: column; gap: 2px; width: 170px; }
+.masterwrap label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+.masterwrap input { width: 100%; }
+.bpmwrap { display: flex; flex-direction: column; gap: 3px; width: 92px; }
+.beatbar { height: 5px; background: #1c1c28; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+#beatfill { height: 100%; width: 0; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+/* --- live LFO scopes --- */
+.lfoscopes { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.lfobox { display: flex; flex-direction: column; gap: 2px; }
+.lfol { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.lfobox canvas { background: #0e0e15; border: 1px solid var(--line); border-radius: 3px; display: block; }
+
+/* --- group accents: layers cyan, effects magenta --- */
+.group.layer { border-color: rgba(53, 224, 216, 0.3); }
+.group.layer h2 { color: var(--cyan); }
+.group.fx { border-color: rgba(255, 62, 165, 0.28); }
+.group.fx h2 { color: var(--magenta); }

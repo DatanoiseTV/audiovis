@@ -19,12 +19,20 @@ uniform float u_p2;
 uniform vec3  u_audio; // low / mid / high band energy, 0..1 (filled by audio engine)
 uniform float u_beat;  // onset pulse, spikes ~1.0 on a hit and decays
 
+// Per-layer transform (pan / zoom / rotate), applied inside av_coord so every
+// coordinate-based generator inherits it for free.
+uniform float u_xzoom; // 1 = none
+uniform float u_xrot;  // radians
+uniform vec2  u_xoff;  // pan, in aspect-corrected units
+
 VARYING vec2 v_uv;
 
-// Aspect-corrected centered coordinate, roughly -1..1 on the short axis.
+// Aspect-corrected, transformed centered coordinate (roughly -1..1 short axis).
 vec2 av_coord() {
     vec2 p = v_uv * 2.0 - 1.0;
     p.x *= u_res.x / max(u_res.y, 1.0);
+    p = mat2(cos(u_xrot), -sin(u_xrot), sin(u_xrot), cos(u_xrot)) * p / max(u_xzoom, 0.05);
+    p += u_xoff;
     return p;
 }
 

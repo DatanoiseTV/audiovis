@@ -30,6 +30,10 @@ struct LayerParams {
     hue: ParamId,
     p1: ParamId,
     p2: ParamId,
+    zoom: ParamId,
+    rot: ParamId,
+    posx: ParamId,
+    posy: ParamId,
 }
 
 pub struct Compositor {
@@ -84,8 +88,13 @@ impl Compositor {
                 let hue = store.register(ParamSpec::new(format!("{pre}.hue"), "Hue", &g, f("", 0.0, 1.0, (i as f32) * 0.33)));
                 let p1 = store.register(ParamSpec::new(format!("{pre}.p1"), "Param 1", &g, f("", 0.0, 1.0, 0.5)));
                 let p2 = store.register(ParamSpec::new(format!("{pre}.p2"), "Param 2", &g, f("", 0.0, 1.0, 0.5)));
+                // Per-layer transform modifiers, wired into every generator via av_coord.
+                let zoom = store.register(ParamSpec::new(format!("{pre}.zoom"), "Zoom", &g, f("", 0.1, 4.0, 1.0)));
+                let rot = store.register(ParamSpec::new(format!("{pre}.rotate"), "Rotate", &g, f("", -1.0, 1.0, 0.0)));
+                let posx = store.register(ParamSpec::new(format!("{pre}.posx"), "Pan X", &g, f("", -1.0, 1.0, 0.0)));
+                let posy = store.register(ParamSpec::new(format!("{pre}.posy"), "Pan Y", &g, f("", -1.0, 1.0, 0.0)));
 
-                layers.push(LayerParams { generator, opacity, blend, speed, scale, warp, hue, p1, p2 });
+                layers.push(LayerParams { generator, opacity, blend, speed, scale, warp, hue, p1, p2, zoom, rot, posx, posy });
             }
         }
         let vert = include_str!("shaders/fullscreen.vert");
@@ -167,6 +176,9 @@ impl Compositor {
                 p2: p.get_f32(lp.p2),
                 audio: self.audio,
                 beat: self.beat,
+                zoom: p.get_f32(lp.zoom),
+                rot: p.get_f32(lp.rot) * std::f32::consts::PI,
+                pan: (p.get_f32(lp.posx), p.get_f32(lp.posy)),
             };
             let gen = p.get(lp.generator).as_i64().max(0) as usize;
             self.layer_targets[i].bind_as_target();

@@ -168,8 +168,8 @@ impl WebHandle {
 
     /// Publish audio/clock telemetry (call at a modest rate, not every frame).
     #[allow(clippy::too_many_arguments)]
-    pub fn publish_telemetry(&self, low: f32, mid: f32, high: f32, rms: f32, beat: f32, bpm: f32, beat_phase: f32, bar_phase: f32) {
-        let t = proto::Telemetry { low, mid, high, rms, beat, bpm, beat_phase, bar_phase };
+    pub fn publish_telemetry(&self, low: f32, mid: f32, high: f32, rms: f32, beat: f32, bpm: f32, beat_phase: f32, bar_phase: f32, beats: f32) {
+        let t = proto::Telemetry { low, mid, high, rms, beat, bpm, beat_phase, bar_phase, beats };
         if let Ok(mut s) = self.snapshot.write() {
             s.telemetry = t.clone();
         }

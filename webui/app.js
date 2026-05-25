@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-10";
+const UI_BUILD = "ui-11";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -29,9 +29,14 @@ let ws = null;
 let armed = null; // path currently in MIDI/OSC learn
 const widgets = new Map(); // path -> { set(value, norm), spec }
 const specsByPath = new Map();
+const paramValues = new Map(); // path -> { value, norm }, latest known
 let generators = [];
 let modSources = [];
-let routesEl = null; // container for the active modulation routes
+let latestTelemetry = null;
+let blackoutPrev = null; // brightness remembered while blacked out
+
+// LFO division lengths in beats (must match Rust LFO_DIVISIONS).
+const DIV_BEATS = [32, 16, 8, 4, 2, 1, 0.5, 0.25];
 
 async function main() {
   // protobuf.min.js is a plain <script> before this one, so the global should
@@ -55,7 +60,34 @@ async function main() {
     console.error(e);
     return fail("schema: " + (e && e.message ? e.message : e));
   }
+  setupTransport();
+  requestAnimationFrame(drawLfos);
   connect();
+}
+
+// Master fader, blackout and the spacebar kill - the controls a VJ reaches for.
+function setupTransport() {
+  const master = document.getElementById("master");
+  master.oninput = () => sendNorm("global.brightness", parseFloat(master.value));
+
+  const bo = document.getElementById("blackout");
+  bo.onclick = () => toggleBlackout();
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); toggleBlackout(); }
+  });
+}
+
+function toggleBlackout() {
+  const bo = document.getElementById("blackout");
+  if (blackoutPrev === null) {
+    blackoutPrev = paramValues.get("global.brightness")?.norm ?? 1;
+    sendNorm("global.brightness", 0);
+    bo.classList.add("active");
+  } else {
+    sendNorm("global.brightness", blackoutPrev);
+    blackoutPrev = null;
+    bo.classList.remove("active");
+  }
 }
 
 function setConn(text) {
@@ -122,27 +154,94 @@ const sendPreset = (action, path) => send({ preset: { action, path } });
 
 // --- UI building ---
 
+const FX_GROUPS = ["Feedback", "Mirror", "Hue cycle", "Lo-fi", "VHS", "Glitch", "Bloom"];
+
+// Order groups for a live surface: layers first, then the effects rack, then
+// LFOs / clock / global.
+function groupOrder(name) {
+  if (name.startsWith("Layer")) return 0 + (parseInt(name.replace(/\D/g, ""), 10) || 0);
+  const fx = FX_GROUPS.indexOf(name);
+  if (fx >= 0) return 10 + fx;
+  return { LFO: 30, Clock: 31, Global: 32 }[name] ?? 40;
+}
+
 function buildUI(schema) {
   for (const s of schema) specsByPath.set(s.path, s);
   widgets.clear();
   const main = document.getElementById("groups");
   main.innerHTML = "";
 
-  // Group specs, preserving server order.
   const groups = new Map();
   for (const s of schema) {
     if (!groups.has(s.group)) groups.set(s.group, []);
     groups.get(s.group).push(s);
   }
 
-  for (const [name, specs] of groups) {
-    const sec = el("div", "group");
+  const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
+  for (const name of names) {
+    const cls = name.startsWith("Layer") ? "group layer" : FX_GROUPS.includes(name) ? "group fx" : "group";
+    const sec = el("div", cls);
     sec.appendChild(el("h2", null, name));
-    for (const spec of specs) sec.appendChild(buildRow(spec));
+    for (const spec of groups.get(name)) sec.appendChild(buildRow(spec));
+    if (name === "LFO") sec.appendChild(buildLfoScopes());
     main.appendChild(sec);
   }
   main.appendChild(buildMatrix());
   main.appendChild(buildPresetBar());
+}
+
+// --- live LFO shape previews ---
+
+function buildLfoScopes() {
+  const wrap = el("div", "lfoscopes");
+  for (let n = 1; n <= 3; n++) {
+    const box = el("div", "lfobox");
+    const cv = el("canvas"); cv.width = 150; cv.height = 46; cv.id = `lfoscope-${n}`;
+    box.append(el("span", "lfol", `lfo ${n}`), cv);
+    wrap.appendChild(box);
+  }
+  return wrap;
+}
+
+// One LFO sample, matching the Rust lfo().
+function lfoValue(shape, phase) {
+  const f = ((phase % 1) + 1) % 1;
+  switch (shape) {
+    case 1: return 4 * Math.abs(f - 0.5) - 1;       // triangle
+    case 2: return 2 * f - 1;                         // saw
+    case 3: return f < 0.5 ? 1 : -1;                  // square
+    case 4: { const c = Math.floor(phase); return (Math.abs(Math.sin(c * 12.9898) * 43758.5453) % 1) * 2 - 1; }
+    default: return Math.sin(6.28318530718 * f);      // sine
+  }
+}
+
+function drawLfos() {
+  requestAnimationFrame(drawLfos);
+  const beats = latestTelemetry ? latestTelemetry.beats || 0 : 0;
+  for (let n = 1; n <= 3; n++) {
+    const cv = document.getElementById(`lfoscope-${n}`);
+    if (!cv) continue;
+    const ctx = cv.getContext("2d");
+    const w = cv.width, h = cv.height, mid = h / 2;
+    const div = DIV_BEATS[Math.round(paramValues.get(`lfo.${n}.div`)?.value ?? 3)] || 4;
+    const shape = Math.round(paramValues.get(`lfo.${n}.shape`)?.value ?? 0);
+    const phase = (beats / div) % 1;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = "#262633"; ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
+    // waveform over one cycle
+    ctx.strokeStyle = "#35e0d8"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let x = 0; x <= w; x++) {
+      const y = mid - lfoValue(shape, x / w) * (mid - 3);
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // playhead + live value dot
+    const px = phase * w;
+    ctx.strokeStyle = "#ff3ea5"; ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+    const vy = mid - lfoValue(shape, phase) * (mid - 3);
+    ctx.fillStyle = "#ff3ea5"; ctx.beginPath(); ctx.arc(px, vy, 2.5, 0, 6.2832); ctx.fill();
+  }
 }
 
 // --- modulation matrix: grid patchbay ---
@@ -414,19 +513,26 @@ function setArmed(path) {
 // --- incoming state ---
 
 function applyChange(c) {
+  paramValues.set(c.path, { value: c.value || 0, norm: c.norm || 0 });
   const w = widgets.get(c.path);
   if (w) w.set(c.value || 0, c.norm || 0);
-  // A learned binding clears the armed state.
-  if (armed === c.path) {} // value updates don't disarm; learn notice would.
+  // Keep the header master fader in sync (it is not a registered widget).
+  if (c.path === "global.brightness") {
+    const m = document.getElementById("master");
+    if (m && document.activeElement !== m) m.value = c.norm || 0;
+  }
 }
 
 function applyTelemetry(t) {
+  latestTelemetry = t;
   setMeter("m-low", t.low); setMeter("m-mid", t.mid); setMeter("m-high", t.high); setMeter("m-rms", t.rms);
   const beat = document.getElementById("beat");
   // Flash on the audio onset or on each clock downbeat, so it visibly ticks.
   const onDownbeat = (t.beat_phase || 0) < 0.12;
   beat.classList.toggle("hit", (t.beat || 0) > 0.5 || onDownbeat);
   document.getElementById("bpm").textContent = `${Math.round(t.bpm || 0)} BPM`;
+  const bf = document.getElementById("beatfill");
+  if (bf) bf.style.width = `${(t.beat_phase || 0) * 100}%`;
 
   // The clock phase/tempo are telemetry, not notified params (they change every
   // frame), so drive the Clock-group widgets directly from telemetry here.
