@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-25";
+const UI_BUILD = "ui-26";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -459,7 +459,7 @@ function renderSelected() {
 
   const mk = (label, min, val, onin) => {
     const w = el("div", "rng");
-    const i = el("input"); i.type = "range"; i.min = min; i.max = 1; i.step = 0.01; i.value = val;
+    const i = el("input"); i.type = "range"; i.min = min; i.max = 1; i.step = "any"; i.value = val;
     i.oninput = onin; w.append(el("span", "rngl", label), i); return { w, i };
   };
   const send = () => sendMod(selected.source, selected.target, parseFloat(amt.i.value), parseFloat(sm.i.value));
@@ -524,7 +524,8 @@ function buildRow(spec) {
     widget = { set: (v) => { sel.value = Math.round(v); } };
   } else {
     // float or generic int: a normalised slider, value display shows raw.
-    const r = el("input"); r.type = "range"; r.min = 0; r.max = 1; r.step = 0.001;
+    // step "any" gives full float resolution while dragging.
+    const r = el("input"); r.type = "range"; r.min = 0; r.max = 1; r.step = "any";
     r.oninput = () => sendNorm(spec.path, parseFloat(r.value));
     mid.appendChild(r);
     widget = {
@@ -985,7 +986,8 @@ function setMeter(id, v) { document.getElementById(id).style.height = `${Math.mi
 
 function fmt(v, spec) {
   if (spec.kind === "int") return String(Math.round(v));
-  const s = Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);
+  const a = Math.abs(v);
+  const s = a >= 100 ? v.toFixed(1) : a >= 10 ? v.toFixed(2) : v.toFixed(3);
   return spec.unit ? `${s}${spec.unit}` : s;
 }
 
