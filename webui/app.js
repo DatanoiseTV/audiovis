@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-24";
+const UI_BUILD = "ui-25";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -41,6 +41,7 @@ let modSources = [];
 let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
 let mediaSourceSelects = []; // {sel, fill} for live source-dropdown refresh
 let mediaDeck = 0;           // which media layer the browser loads into
+let scriptNames = [];        // available script names (builtins + user)
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
@@ -159,6 +160,11 @@ function connect() {
         midiPort = msg.midi_port || "";
         renderDevices();
       }
+      if (msg.script_present) {
+        if (msg.scripts && msg.scripts.length) { scriptNames = msg.scripts; renderScriptNames(); }
+        if (msg.script) setScriptEditor(msg.script);
+      }
+      if (msg.script_error_present) showScriptError(msg.script_error || "");
       if (msg.preview && msg.preview.length) updatePreview(msg.preview);
     } catch (e) {
       console.error("decode error", e);
@@ -187,6 +193,7 @@ const sendPreset = (action, path) => send({ preset: { action, path } });
 const sendText = (id, text) => send({ text: { id, text } });
 const sendRelease = (path) => send({ set: { path, release: true } });
 const sendDevice = (kind, name) => send({ device: { kind, name } });
+const sendScript = (action, name, source) => send({ script: { action, name: name || "", source: source || "" } });
 
 // --- UI building ---
 
@@ -230,6 +237,7 @@ function buildUI(schema) {
     main.appendChild(sec);
   }
   main.appendChild(buildDevices());
+  main.appendChild(buildScript());
   main.appendChild(buildMappings());
   main.appendChild(buildMatrix());
   main.appendChild(buildPresets());
@@ -787,6 +795,73 @@ function renderDevices() {
   devicesEl.innerHTML = "";
   devicesEl.appendChild(devicePicker("Audio in", "audio", audioDevices, audioDevice, "system default"));
   devicesEl.appendChild(devicePicker("MIDI in", "midi", midiPorts, midiPort, "all ports"));
+}
+
+// --- JS scripting panel ---
+
+let scriptEditor = null, scriptNameInput = null, scriptLoadSel = null, scriptErrEl = null;
+
+// A code editor that runs JS every frame to automate params or draw into the
+// 2D buffer (shown by the "script" generator). Apply runs live; Save stores it.
+function buildScript() {
+  const sec = el("div", "group matrix scriptpanel");
+  const h = el("h2", null, "Script");
+  h.onclick = (e) => { if (e.target === h) sec.classList.toggle("collapsed"); };
+  sec.appendChild(h);
+
+  sec.appendChild(el("div", "hint",
+    "Runs every frame. In scope: t, dt, frame, low, mid, high, rms, onset, beat, bar, bpm, lfo[0..5]. " +
+    "Calls: set(path,v) setn(path,0..1) get(path) trigger(path) | 2D: clear(r,g,b) pset(x,y,r,g,b) line(...) rect(...), SW x SH — select the \"script\" generator. " +
+    "The 2D buffer suits shapes/sprites; heavy per-pixel loops are slow (use the GLSL generators for those)."));
+
+  scriptEditor = el("textarea", "scripted");
+  scriptEditor.spellcheck = false;
+  scriptEditor.placeholder = "// e.g.\nset(\"layer.0.hue\", 0.5 + 0.5*Math.sin(t));\nset(\"global.brightness\", 0.7 + rms*0.3);";
+  // Ctrl/Cmd-Enter applies.
+  scriptEditor.onkeydown = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); applyScript(); } };
+  sec.appendChild(scriptEditor);
+
+  scriptErrEl = el("div", "scripterr");
+  sec.appendChild(scriptErrEl);
+
+  const bar = el("div", "scriptbar");
+  const apply = el("button", "btn", "Apply (Cmd/Ctrl-Enter)");
+  apply.onclick = applyScript;
+  bar.appendChild(apply);
+  const stop = el("button", "btn", "Stop");
+  stop.title = "clear the running script";
+  stop.onclick = () => { sendScript("apply", "", ""); };
+  bar.appendChild(stop);
+
+  const spacer = el("span"); spacer.style.flex = "1"; bar.appendChild(spacer);
+
+  scriptLoadSel = el("select");
+  scriptLoadSel.onchange = () => { if (scriptLoadSel.value) { sendScript("load", scriptLoadSel.value, ""); scriptNameInput.value = scriptLoadSel.value; } };
+  renderScriptNames();
+  bar.appendChild(scriptLoadSel);
+
+  scriptNameInput = el("input"); scriptNameInput.type = "text"; scriptNameInput.placeholder = "name"; scriptNameInput.className = "scriptname";
+  bar.appendChild(scriptNameInput);
+  const save = el("button", "btn", "Save");
+  save.onclick = () => { const n = (scriptNameInput.value || "").trim(); if (n) sendScript("save", n, scriptEditor.value); };
+  bar.appendChild(save);
+
+  sec.appendChild(bar);
+  return sec;
+}
+
+function applyScript() { if (scriptEditor) sendScript("apply", "", scriptEditor.value); }
+function setScriptEditor(src) { if (scriptEditor) scriptEditor.value = src; }
+function renderScriptNames() {
+  if (!scriptLoadSel) return;
+  scriptLoadSel.innerHTML = "";
+  const def = el("option", null, "load example..."); def.value = ""; scriptLoadSel.appendChild(def);
+  for (const n of scriptNames) { const o = el("option", null, n); o.value = n; scriptLoadSel.appendChild(o); }
+}
+function showScriptError(err) {
+  if (!scriptErrEl) return;
+  scriptErrEl.textContent = err;
+  scriptErrEl.classList.toggle("on", !!err);
 }
 
 // --- MIDI / OSC mapping list ---

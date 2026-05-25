@@ -425,3 +425,25 @@ select, input[type=text] { padding: 4px 6px; font-size: 12px; }
 }
 .clip.clear { display: flex; align-items: center; justify-content: center; }
 .clip.clear .cliplbl { position: static; background: none; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+/* ============================================================
+   SCRIPT PANEL - the JS code editor
+   ============================================================ */
+.scriptpanel { border-color: rgba(140, 120, 255, 0.32); }
+.scriptpanel h2 { color: #b3a8ff; }
+.scripted {
+  width: 100%; min-height: 200px; resize: vertical;
+  background: #0a0a12; color: #d7d7e0; border: 1px solid var(--line2); border-radius: 6px;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 10px 12px;
+  tab-size: 2; white-space: pre; overflow: auto;
+}
+.scripted:focus { outline: none; border-color: #8c78ff; box-shadow: 0 0 10px rgba(140,120,255,0.35); }
+.scripterr {
+  display: none; margin-top: 6px; padding: 6px 9px; border-radius: 5px;
+  background: rgba(255,62,108,0.12); border: 1px solid rgba(255,62,108,0.5);
+  color: #ff7a98; font-family: var(--mono); font-size: 11px; white-space: pre-wrap;
+}
+.scripterr.on { display: block; }
+.scriptbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.scriptbar .scriptname { width: 130px; }
+.scriptbar select { max-width: 200px; }
