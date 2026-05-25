@@ -99,8 +99,9 @@ depth and smoothing:
 
 - **audio** — low / mid / high bands, RMS, onset, all auto-gained;
 - **beat clock** — phase, locked to incoming MIDI clock or free-running;
-- **six LFOs** — nine waveforms (sine, triangle, saw up/down, square, pulse,
-  sample-&-hold, smooth-noise, steps), tempo-synced to musical divisions.
+- **up to eight LFOs** — nine waveforms (sine, triangle, saw up/down, square,
+  pulse, sample-&-hold, smooth-noise, steps), tempo-synced to musical divisions;
+  add and remove them from the LFO rack like layers and effects.
 
 Per-layer **transforms** (zoom / rotate / pan) and a **lettering bank** — eight
 MIDI-note-gated text slots (show on note-on, hide on note-off), seven baked
