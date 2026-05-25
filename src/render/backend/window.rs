@@ -363,7 +363,7 @@ fn build_mod_sources(engine: &Engine, low: f32, mid: f32, high: f32, rms: f32, b
 
     // LFOs run off the musical position so they stay locked to the measure.
     let beats = engine.musical_beats();
-    for n in 1..=3 {
+    for n in 1..=6 {
         let div_idx = p.id_of(&format!("lfo.{n}.div")).map(|id| p.get(id).as_i64()).unwrap_or(3);
         let shape = p.id_of(&format!("lfo.{n}.shape")).map(|id| p.get(id).as_i64()).unwrap_or(0);
         let bpc = LFO_DIVISIONS.get(div_idx as usize).copied().unwrap_or(4.0) as f64;
@@ -373,18 +373,30 @@ fn build_mod_sources(engine: &Engine, low: f32, mid: f32, high: f32, rms: f32, b
     s
 }
 
-/// One LFO sample. `phase` is time*rate; output is bipolar -1..1.
-fn lfo(shape: i64, phase: f32) -> f32 {
+/// Deterministic per-cycle random in -1..1 (synced sample-and-hold).
+fn cycle_rand(cycle: f32) -> f32 {
+    ((cycle * 12.9898).sin() * 43758.547).fract() * 2.0 - 1.0
+}
+
+/// One LFO sample. `phase` is the musical position / division; bipolar -1..1.
+/// Shapes match the UI: sine, triangle, saw up/down, square, pulse, rand,
+/// smooth noise, steps.
+pub fn lfo(shape: i64, phase: f32) -> f32 {
     let f = phase.rem_euclid(1.0);
     match shape {
-        1 => 4.0 * (f - 0.5).abs() - 1.0,          // triangle
-        2 => 2.0 * f - 1.0,                          // saw
-        3 => if f < 0.5 { 1.0 } else { -1.0 },       // square
-        4 => {
-            // sample-and-hold: a new random level each cycle.
-            let cycle = phase.floor();
-            (((cycle * 12.9898).sin() * 43758.547).fract()) * 2.0 - 1.0
+        1 => 4.0 * (f - 0.5).abs() - 1.0,             // triangle
+        2 => 2.0 * f - 1.0,                             // saw up (ramp)
+        3 => 1.0 - 2.0 * f,                             // saw down
+        4 => if f < 0.5 { 1.0 } else { -1.0 },          // square
+        5 => if f < 0.25 { 1.0 } else { -1.0 },         // pulse (25%)
+        6 => cycle_rand(phase.floor()),                 // sample & hold (synced random)
+        7 => {
+            // Smooth value-noise random, interpolated between cycle samples.
+            let c = phase.floor();
+            let t = f * f * (3.0 - 2.0 * f);
+            cycle_rand(c) * (1.0 - t) + cycle_rand(c + 1.0) * t
         }
-        _ => (std::f32::consts::TAU * f).sin(),       // sine
+        8 => (f * 8.0).floor() / 3.5 - 1.0,             // 8-step staircase
+        _ => (std::f32::consts::TAU * f).sin(),         // sine
     }
 }

@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-13";
+const UI_BUILD = "ui-14";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -208,7 +208,7 @@ function buildUI(schema) {
 
 function buildLfoScopes() {
   const wrap = el("div", "lfoscopes");
-  for (let n = 1; n <= 3; n++) {
+  for (let n = 1; n <= 6; n++) {
     const box = el("div", "lfobox");
     const cv = el("canvas"); cv.width = 150; cv.height = 46; cv.id = `lfoscope-${n}`;
     box.append(el("span", "lfol", `lfo ${n}`), cv);
@@ -217,22 +217,28 @@ function buildLfoScopes() {
   return wrap;
 }
 
-// One LFO sample, matching the Rust lfo().
+// One LFO sample, matching the Rust lfo() (sine, tri, saw up/dn, square, pulse,
+// rand, smooth noise, steps).
+function cycleRand(c) { const v = Math.sin(c * 12.9898) * 43758.547; return (v - Math.floor(v)) * 2 - 1; }
 function lfoValue(shape, phase) {
   const f = ((phase % 1) + 1) % 1;
   switch (shape) {
-    case 1: return 4 * Math.abs(f - 0.5) - 1;       // triangle
-    case 2: return 2 * f - 1;                         // saw
-    case 3: return f < 0.5 ? 1 : -1;                  // square
-    case 4: { const c = Math.floor(phase); return (Math.abs(Math.sin(c * 12.9898) * 43758.5453) % 1) * 2 - 1; }
-    default: return Math.sin(6.28318530718 * f);      // sine
+    case 1: return 4 * Math.abs(f - 0.5) - 1;
+    case 2: return 2 * f - 1;
+    case 3: return 1 - 2 * f;
+    case 4: return f < 0.5 ? 1 : -1;
+    case 5: return f < 0.25 ? 1 : -1;
+    case 6: return cycleRand(Math.floor(phase));
+    case 7: { const c = Math.floor(phase), t = f * f * (3 - 2 * f); return cycleRand(c) * (1 - t) + cycleRand(c + 1) * t; }
+    case 8: return Math.floor(f * 8) / 3.5 - 1;
+    default: return Math.sin(6.28318530718 * f);
   }
 }
 
 function drawLfos() {
   requestAnimationFrame(drawLfos);
   const beats = latestTelemetry ? latestTelemetry.beats || 0 : 0;
-  for (let n = 1; n <= 3; n++) {
+  for (let n = 1; n <= 6; n++) {
     const cv = document.getElementById(`lfoscope-${n}`);
     if (!cv) continue;
     const ctx = cv.getContext("2d");

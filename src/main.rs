@@ -121,11 +121,12 @@ fn seed_demo_params(engine: &mut Engine) {
     p.register(ParamSpec::new("text.fx", "FX", "Text", ParamKind::Int { min: 0, max: 4, default: 0 }));
     p.register(ParamSpec::new("text.fxamt", "FX amt", "Text", ParamKind::Float { min: 0.0, max: 1.0, default: 0.5 }));
 
-    // Tempo-synced LFOs, available as modulation sources (lfo.1 .. lfo.3). The
+    // Tempo-synced LFOs (lfo.1 .. lfo.6), available as modulation sources. The
     // rate is a musical division of the measure, not free Hz, so they always
-    // lock to the beat clock. Defaults: 1 bar, 1/2, 1/4.
-    let div_defaults = [3, 4, 5];
-    for n in 1..=3 {
+    // lock to the beat clock.
+    let div_defaults = [3, 4, 5, 3, 2, 6];
+    let shape_defaults = [0, 1, 2, 6, 7, 4];
+    for n in 1..=6 {
         let g = "LFO";
         // div: index into LFO_DIVISIONS (8 bars .. 1/16).
         p.register(ParamSpec::new(
@@ -134,12 +135,12 @@ fn seed_demo_params(engine: &mut Engine) {
             g,
             ParamKind::Int { min: 0, max: 7, default: div_defaults[n - 1] },
         ));
-        // shape: 0 sine, 1 triangle, 2 saw, 3 square, 4 sample-and-hold
+        // shape: 0 sine,1 tri,2 saw up,3 saw dn,4 square,5 pulse,6 rand,7 noise,8 steps
         p.register(ParamSpec::new(
             format!("lfo.{n}.shape"),
             format!("LFO {n} shape"),
             g,
-            ParamKind::Int { min: 0, max: 4, default: 0 },
+            ParamKind::Int { min: 0, max: 8, default: shape_defaults[n - 1] },
         ));
     }
 }
