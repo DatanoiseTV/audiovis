@@ -136,19 +136,25 @@ impl GeneratorBank {
         let i = index.min(self.programs.len().saturating_sub(1));
         let p = &self.programs[i];
         p.bind();
-        p.set_f32("u_time", u.time);
-        p.set_vec2("u_res", u.res.0, u.res.1);
-        p.set_f32("u_speed", u.speed);
-        p.set_f32("u_scale", u.scale);
-        p.set_f32("u_warp", u.warp);
-        p.set_f32("u_hue", u.hue);
-        p.set_f32("u_p1", u.p1);
-        p.set_f32("u_p2", u.p2);
-        p.set_vec3("u_audio", u.audio.0, u.audio.1, u.audio.2);
-        p.set_f32("u_beat", u.beat);
-        p.set_f32("u_xzoom", u.zoom);
-        p.set_f32("u_xrot", u.rot);
-        p.set_vec2("u_xoff", u.pan.0, u.pan.1);
+        apply_common(p, u);
         quad.draw();
     }
+}
+
+/// Upload the shared uniform set to a bound program. Used by generators and the
+/// simulation bank so both speak the same vocabulary.
+pub fn apply_common(p: &Program, u: &CommonUniforms) {
+    p.set_f32("u_time", u.time);
+    p.set_vec2("u_res", u.res.0, u.res.1);
+    p.set_f32("u_speed", u.speed);
+    p.set_f32("u_scale", u.scale);
+    p.set_f32("u_warp", u.warp);
+    p.set_f32("u_hue", u.hue);
+    p.set_f32("u_p1", u.p1);
+    p.set_f32("u_p2", u.p2);
+    p.set_vec3("u_audio", u.audio.0, u.audio.1, u.audio.2);
+    p.set_f32("u_beat", u.beat);
+    p.set_f32("u_xzoom", u.zoom);
+    p.set_f32("u_xrot", u.rot);
+    p.set_vec2("u_xoff", u.pan.0, u.pan.1);
 }

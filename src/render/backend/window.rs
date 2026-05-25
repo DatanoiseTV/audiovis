@@ -148,7 +148,9 @@ impl WindowApp {
 
         // Publish the now-complete parameter schema to the web UI.
         if let Some(web) = &self.web {
-            let generators = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
+            // Generators and simulations share the layer.N.generator index space.
+            let mut generators: Vec<String> = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
+            generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
             web.set_schema(&self.engine, generators);
         }
 

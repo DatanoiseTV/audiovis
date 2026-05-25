@@ -255,19 +255,31 @@ pub struct RenderTexture {
 }
 
 impl RenderTexture {
+    /// Standard 8-bit RGBA target.
     pub fn new(gl: &Gl, width: i32, height: i32) -> Result<Self, String> {
+        Self::with_format(gl, width, height, glow::RGBA as i32, glow::UNSIGNED_BYTE)
+    }
+
+    /// 16-bit float RGBA target, for simulation state that needs precision
+    /// (reaction-diffusion). Errors if the context can't render to it (the
+    /// caller then falls back to [`new`]).
+    pub fn new_float(gl: &Gl, width: i32, height: i32) -> Result<Self, String> {
+        Self::with_format(gl, width, height, glow::RGBA16F as i32, glow::HALF_FLOAT)
+    }
+
+    fn with_format(gl: &Gl, width: i32, height: i32, internal: i32, ty: u32) -> Result<Self, String> {
         unsafe {
             let tex = gl.create_texture()?;
             gl.bind_texture(glow::TEXTURE_2D, Some(tex));
             gl.tex_image_2d(
                 glow::TEXTURE_2D,
                 0,
-                glow::RGBA as i32,
+                internal,
                 width.max(1),
                 height.max(1),
                 0,
                 glow::RGBA,
-                glow::UNSIGNED_BYTE,
+                ty,
                 glow::PixelUnpackData::Slice(None),
             );
             // Linear + clamp keeps non-power-of-two sizes valid on GLES2.
@@ -288,9 +300,20 @@ impl RenderTexture {
             let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             if status != glow::FRAMEBUFFER_COMPLETE {
+                gl.delete_framebuffer(fbo);
+                gl.delete_texture(tex);
                 return Err(format!("incomplete framebuffer: {status:#x}"));
             }
             Ok(Self { fbo, tex, width: width.max(1), height: height.max(1), gl: gl.clone() })
+        }
+    }
+
+    /// Clear this target to a solid colour.
+    pub fn clear_to(&self, r: f32, g: f32, b: f32, a: f32) {
+        self.bind_as_target();
+        unsafe {
+            self.gl.clear_color(r, g, b, a);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
         }
     }
 
@@ -329,6 +352,31 @@ impl PingPong {
             front: RenderTexture::new(gl, width, height)?,
             back: RenderTexture::new(gl, width, height)?,
         })
+    }
+
+    /// Float-precision pair, falling back to 8-bit if the context can't render
+    /// to float (some GLES2 boards) - simulations still run, just coarser.
+    pub fn new_sim(gl: &Gl, width: i32, height: i32) -> (Self, bool) {
+        match (RenderTexture::new_float(gl, width, height), RenderTexture::new_float(gl, width, height)) {
+            (Ok(front), Ok(back)) => (Self { front, back }, true),
+            _ => (
+                Self {
+                    front: RenderTexture::new(gl, width, height).expect("rgba8 rt"),
+                    back: RenderTexture::new(gl, width, height).expect("rgba8 rt"),
+                },
+                false,
+            ),
+        }
+    }
+
+    /// Clear both buffers to a colour (seed a simulation to a flat state).
+    pub fn clear_to(&self, r: f32, g: f32, b: f32, a: f32) {
+        self.front.clear_to(r, g, b, a);
+        self.back.clear_to(r, g, b, a);
+    }
+
+    pub fn front(&self) -> &RenderTexture {
+        &self.front
     }
 
     /// Texture holding the previous result (the one to sample).
