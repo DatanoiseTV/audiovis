@@ -2,7 +2,7 @@
 
 The web control surface should feel like it belongs next to a video mixer and a
 stack of CRTs in a dark club: an analog-video instrument, not a settings page.
-The look is for **pixelflowers** - abstract, analog, queer, techno.
+The look is for a live video instrument - abstract, analog, demoscene, techno.
 
 ## Mood
 

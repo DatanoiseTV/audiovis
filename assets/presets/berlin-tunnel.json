@@ -8,4 +8,4 @@
  {"source":"lfo.1","target":"layer.0.hue","amount":0.3,"smooth":0.0},
  {"source":"audio.high","target":"post.feedback.zoom","amount":0.4,"smooth":0.2},
  {"source":"audio.low","target":"layer.1.opacity","amount":0.4,"smooth":0.1}
-],"text":["pixelflowers"]}
+],"text":["AUDIOVIS"]}

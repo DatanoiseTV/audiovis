@@ -282,3 +282,29 @@ header { padding: 12px 18px; gap: 18px; border-bottom: 1px solid var(--line2);
 
 /* lfo scopes a touch nicer */
 .lfobox canvas { border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,0.4) inset; }
+
+/* ============================================================
+   LAYOUT FIX - masonry packing via CSS multi-column
+   (grid left big gaps under short cards next to tall ones)
+   ============================================================ */
+main {
+  display: block;
+  column-width: 330px;
+  column-gap: 16px;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 18px;
+}
+.group {
+  display: inline-block;
+  width: 100%;
+  margin: 0 0 16px;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+/* full-width panels (matrix grid, MIDI map, presets) span all columns */
+.matrix {
+  display: block;
+  column-span: all;
+  -webkit-column-span: all;
+}

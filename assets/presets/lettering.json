@@ -4,4 +4,4 @@
  "text.font":{"type":"int","value":6},"text.fx":{"type":"int","value":1},"text.fxamt":{"type":"float","value":0.6},"text.size":{"type":"float","value":0.16},"text.hue":{"type":"float","value":0.0}
 },"mappings":[],"mod_routes":[
  {"source":"lfo.2","target":"text.hue","amount":0.5,"smooth":0.0}
-],"text":["PIXELFLOWERS","BERLIN","TECHNO","ACID","TRANSMISSION","////","NO PHOTOS","LOVE"]}
+],"text":["AUDIOVIS","BERLIN","TECHNO","ACID","TRANSMISSION","////","NO PHOTOS","LOVE"]}
