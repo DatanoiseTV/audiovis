@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-30";
+const UI_BUILD = "ui-31";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -93,8 +93,6 @@ function setupTransport() {
 
   const bo = document.getElementById("blackout");
   bo.onclick = () => toggleBlackout();
-  const al = document.getElementById("addlayer");
-  if (al) al.onclick = () => addLayer();
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); toggleBlackout(); }
   });
@@ -235,6 +233,21 @@ function buildUI(schema) {
   main.appendChild(buildMediaBrowser()); // clip-style media library grid
   layerCards = {};
   fxCards = [];
+
+  // Dedicated racks: layers and the FX chain are managed as decks with inline
+  // add/remove, the rest of the controls flow below.
+  const layersRack = el("div", "group matrix rack");
+  layersRack.appendChild(el("h2", null, "Layers"));
+  const layersBody = el("div", "rackbody");
+  layersRack.appendChild(layersBody);
+  main.appendChild(layersRack);
+
+  const fxRack = el("div", "group matrix rack");
+  fxRack.appendChild(el("h2", null, "FX chain"));
+  const fxBody = el("div", "rackbody");
+  fxRack.appendChild(fxBody);
+  main.appendChild(fxRack);
+
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
@@ -278,8 +291,24 @@ function buildUI(schema) {
     }
     for (const spec of specs) { if (!skip || !skip.has(spec.path)) sec.appendChild(buildRow(spec)); }
     if (name === "LFO") sec.appendChild(buildLfoScopes());
-    main.appendChild(sec);
+    // Route layer/FX cards into their racks; everything else flows below.
+    if (lm) layersBody.appendChild(sec);
+    else if (fxEnable) fxBody.appendChild(sec);
+    else main.appendChild(sec);
   }
+
+  // Inline add tiles at the end of each rack.
+  const addLayerTile = el("button", "addtile");
+  addLayerTile.id = "addlayer";
+  addLayerTile.textContent = "+ Add layer";
+  addLayerTile.onclick = () => addLayer();
+  layersBody.appendChild(addLayerTile);
+
+  const addFxTile = el("div", "addtile");
+  const fxSel = el("select"); fxSel.id = "addfx";
+  addFxTile.appendChild(fxSel);
+  fxBody.appendChild(addFxTile);
+
   refreshLayers();
   refreshFx();
   main.appendChild(buildDevices());
