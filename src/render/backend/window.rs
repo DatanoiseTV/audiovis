@@ -54,6 +54,7 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>, w
         web,
         presets: PresetStore::new(),
         current_preset: String::new(),
+        wave_buf: Vec::new(),
         gfx: None,
         start: Instant::now(),
         last: Instant::now(),
@@ -81,6 +82,8 @@ struct WindowApp {
     web: Option<WebHandle>,
     presets: PresetStore,
     current_preset: String,
+    /// Reused buffer for the latest stereo waveform (interleaved L,R).
+    wave_buf: Vec<f32>,
     gfx: Option<Gfx>,
     start: Instant,
     last: Instant,
@@ -231,6 +234,7 @@ impl WindowApp {
         // Feed the latest audio energies to the generators.
         let (low, mid, high) = self.audio.bands();
         let beat = self.audio.beat();
+        self.audio.copy_waveform(&mut self.wave_buf);
         let rms = self.audio.rms();
 
         // Modulation pass: assemble the signal sources and route them onto
@@ -257,6 +261,7 @@ impl WindowApp {
 
         let Some(gfx) = self.gfx.as_mut() else { return };
         gfx.pipeline.set_audio(low, mid, high, beat);
+        gfx.pipeline.set_waveform(&self.wave_buf);
         let size = gfx.window.inner_size();
         let fc = FrameContext {
             time,

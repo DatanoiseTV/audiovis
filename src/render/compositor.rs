@@ -54,6 +54,8 @@ pub struct Compositor {
     /// Low/mid/high audio energy + onset pulse, updated each frame.
     audio: (f32, f32, f32),
     beat: f32,
+    /// Waveform texture for the scope generator (owned by the pipeline).
+    wave_tex: Option<glow::Texture>,
 }
 
 impl Compositor {
@@ -137,7 +139,13 @@ impl Compositor {
             height: h,
             audio: (0.0, 0.0, 0.0),
             beat: 0.0,
+            wave_tex: None,
         })
+    }
+
+    /// Set the waveform texture sampled by the scope generator.
+    pub fn set_wave_tex(&mut self, tex: glow::Texture) {
+        self.wave_tex = Some(tex);
     }
 
     pub fn generator_count(&self) -> usize {
@@ -206,7 +214,7 @@ impl Compositor {
             let stateless = self.bank.len();
             if gen < stateless {
                 self.layer_targets[i].bind_as_target();
-                self.bank.draw(gen, quad, &u);
+                self.bank.draw(gen, quad, &u, self.wave_tex.unwrap_or(self.layer_targets[i].texture()));
                 self.last_gen[i] = gen as i64;
             } else {
                 // Stateful simulation: (re)seed on selection, step, then render.

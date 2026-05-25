@@ -5,20 +5,24 @@
 //! scale = fewer pixels shaded, the main lever for weak GPUs). The analog and
 //! glitch post chains attach inside the compositor in later milestones.
 
+use crate::audio::WAVE;
 use crate::engine::Engine;
 
 use super::compositor::Compositor;
-use super::gl::{FullscreenQuad, Gl, GlslFlavor};
+use super::gl::{self, FullscreenQuad, Gl, GlslFlavor};
 use super::post::PostChain;
 use super::text::TextOverlay;
 use super::FrameContext;
 
 /// Owns the GL resources for the render target and draws frames into it.
 pub struct Pipeline {
+    gl: Gl,
     quad: FullscreenQuad,
     compositor: Compositor,
     post: PostChain,
     text: TextOverlay,
+    /// Waveform texture (256x1, R=L G=R) uploaded each frame for the scope.
+    wave_tex: glow::Texture,
     render_scale: f32,
     out_w: u32,
     out_h: u32,
@@ -36,10 +40,36 @@ impl Pipeline {
         let quad = FullscreenQuad::new(gl, flavor)?;
         let scale = render_scale.clamp(0.1, 1.0);
         let (iw, ih) = internal_size(width, height, scale);
-        let compositor = Compositor::new(gl, flavor, engine, iw, ih)?;
+        let mut compositor = Compositor::new(gl, flavor, engine, iw, ih)?;
         let post = PostChain::new(gl, flavor, engine, iw, ih)?;
         let text = TextOverlay::new(gl, flavor)?;
-        Ok(Self { quad, compositor, post, text, render_scale: scale, out_w: width.max(1), out_h: height.max(1) })
+        let wave_tex = gl::make_texture(gl, WAVE as i32, 1, None, false);
+        compositor.set_wave_tex(wave_tex);
+        Ok(Self {
+            gl: gl.clone(),
+            quad,
+            compositor,
+            post,
+            text,
+            wave_tex,
+            render_scale: scale,
+            out_w: width.max(1),
+            out_h: height.max(1),
+        })
+    }
+
+    /// Upload the latest stereo waveform (interleaved L,R) for the scope.
+    pub fn set_waveform(&self, samples: &[f32]) {
+        let n = WAVE;
+        let mut bytes = vec![0u8; n * 4];
+        for i in 0..n {
+            let l = samples.get(2 * i).copied().unwrap_or(0.0);
+            let r = samples.get(2 * i + 1).copied().unwrap_or(0.0);
+            bytes[i * 4] = ((l * 0.5 + 0.5).clamp(0.0, 1.0) * 255.0) as u8;
+            bytes[i * 4 + 1] = ((r * 0.5 + 0.5).clamp(0.0, 1.0) * 255.0) as u8;
+            bytes[i * 4 + 3] = 255;
+        }
+        gl::update_texture(&self.gl, self.wave_tex, n as i32, 1, &bytes);
     }
 
     /// Number of generators available, for the UI.

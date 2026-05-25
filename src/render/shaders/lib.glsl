@@ -18,6 +18,7 @@ uniform float u_p1;
 uniform float u_p2;
 uniform vec3  u_audio; // low / mid / high band energy, 0..1 (filled by audio engine)
 uniform float u_beat;  // onset pulse, spikes ~1.0 on a hit and decays
+uniform sampler2D u_wave; // recent stereo waveform (R = L, G = R, mapped 0..1)
 
 // Per-layer transform (pan / zoom / rotate), applied inside av_coord so every
 // coordinate-based generator inherits it for free.

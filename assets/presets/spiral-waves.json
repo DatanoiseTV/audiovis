@@ -1,9 +1,66 @@
-{"version":1,"name":"spiral-waves","params":{
- "layer.0.generator":{"type":"int","value":34},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.p1":{"type":"float","value":0.6},"layer.0.hue":{"type":"float","value":0.55},
- "post.feedback.enable":{"type":"bool","value":true},"post.feedback.amount":{"type":"float","value":0.7},"post.feedback.zoom":{"type":"float","value":0.12},
- "post.hue.enable":{"type":"bool","value":true},"post.hue.rate":{"type":"float","value":0.03},
- "post.bloom.enable":{"type":"bool","value":true},"post.bloom.amount":{"type":"float","value":0.5}
-},"mappings":[],"mod_routes":[
- {"source":"audio.high","target":"post.bloom.amount","amount":0.4,"smooth":0.2},
- {"source":"lfo.5","target":"post.feedback.rotate","amount":0.5,"smooth":0.0}
-],"text":[]}
+{
+ "version": 1,
+ "name": "spiral-waves",
+ "params": {
+  "layer.0.generator": {
+   "type": "int",
+   "value": 35
+  },
+  "layer.0.opacity": {
+   "type": "float",
+   "value": 1.0
+  },
+  "layer.0.p1": {
+   "type": "float",
+   "value": 0.6
+  },
+  "layer.0.hue": {
+   "type": "float",
+   "value": 0.55
+  },
+  "post.feedback.enable": {
+   "type": "bool",
+   "value": true
+  },
+  "post.feedback.amount": {
+   "type": "float",
+   "value": 0.7
+  },
+  "post.feedback.zoom": {
+   "type": "float",
+   "value": 0.12
+  },
+  "post.hue.enable": {
+   "type": "bool",
+   "value": true
+  },
+  "post.hue.rate": {
+   "type": "float",
+   "value": 0.03
+  },
+  "post.bloom.enable": {
+   "type": "bool",
+   "value": true
+  },
+  "post.bloom.amount": {
+   "type": "float",
+   "value": 0.5
+  }
+ },
+ "mappings": [],
+ "mod_routes": [
+  {
+   "source": "audio.high",
+   "target": "post.bloom.amount",
+   "amount": 0.4,
+   "smooth": 0.2
+  },
+  {
+   "source": "lfo.5",
+   "target": "post.feedback.rotate",
+   "amount": 0.5,
+   "smooth": 0.0
+  }
+ ],
+ "text": []
+}

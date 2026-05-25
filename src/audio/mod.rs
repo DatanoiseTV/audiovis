@@ -43,6 +43,9 @@ impl AtomicF32 {
 
 /// The latest analysis result, shared between the analysis thread and the
 /// renderer. All fields are normalised to roughly 0..1.
+/// Recent stereo waveform window length (frames). Drives the scope generator.
+pub const WAVE: usize = 256;
+
 #[derive(Default)]
 pub struct AudioShared {
     low: AtomicF32,
@@ -52,6 +55,8 @@ pub struct AudioShared {
     /// A 0..1 value that spikes on detected onsets and decays.
     beat: AtomicF32,
     active: AtomicBool,
+    /// Recent stereo waveform, interleaved L,R (length WAVE*2).
+    waveform: Mutex<Vec<f32>>,
 }
 
 impl AudioShared {
@@ -68,6 +73,13 @@ impl AudioShared {
     /// Whether a capture stream is actually running.
     pub fn is_active(&self) -> bool {
         self.active.load(Ordering::Relaxed)
+    }
+    /// Copy the latest stereo waveform (interleaved L,R) into `out`.
+    pub fn copy_waveform(&self, out: &mut Vec<f32>) {
+        out.clear();
+        if let Ok(w) = self.waveform.lock() {
+            out.extend_from_slice(&w);
+        }
     }
 }
 
@@ -118,13 +130,14 @@ impl AudioEngine {
         let channels = config.channels() as usize;
         tracing::info!("audio input: {name} @ {sample_rate} Hz, {channels} ch");
 
-        // Ring of recent mono samples shared with the analysis thread.
+        // Ring of recent interleaved-stereo samples shared with the analysis
+        // thread (mono is derived for the FFT; L/R feed the scope).
         let ring: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::with_capacity(WINDOW * 4)));
         let ring_cb = ring.clone();
 
-        let push = move |mono: &[f32]| {
+        let push = move |stereo: &[f32]| {
             let mut r = ring_cb.lock().unwrap();
-            for &s in mono {
+            for &s in stereo {
                 if r.len() >= WINDOW * 4 {
                     r.pop_front();
                 }
@@ -184,15 +197,16 @@ where
     let stream = device.build_input_stream(
         config,
         move |data: &[T], _: &cpal::InputCallbackInfo| {
-            let mut mono = Vec::with_capacity(data.len() / channels.max(1));
-            for frame in data.chunks(channels.max(1)) {
-                let mut acc = 0.0f32;
-                for s in frame {
-                    acc += s.to_mono();
-                }
-                mono.push(acc / channels.max(1) as f32);
+            // Emit interleaved L,R per frame (mono input duplicates to both).
+            let ch = channels.max(1);
+            let mut out = Vec::with_capacity(data.len() / ch * 2);
+            for frame in data.chunks(ch) {
+                let l = frame[0].to_mono();
+                let r = if ch > 1 { frame[1].to_mono() } else { l };
+                out.push(l);
+                out.push(r);
             }
-            push(&mono);
+            push(&out);
         },
         err_fn,
         None,
@@ -241,13 +255,24 @@ fn spawn_analysis(
             let mut flux_avg = 0.0f32;
             let mut beat = 0.0f32;
 
+            let mut wave = vec![0.0f32; WAVE * 2];
             while !stop.load(Ordering::Relaxed) {
                 let have = {
                     let r = ring.lock().unwrap();
-                    if r.len() >= WINDOW {
-                        // Copy the most recent WINDOW samples (overlapping hops).
-                        for (i, s) in r.iter().skip(r.len() - WINDOW).enumerate() {
-                            block[i] = *s;
+                    if r.len() >= WINDOW * 2 {
+                        // The ring is interleaved stereo; average pairs for the
+                        // mono FFT block (most recent WINDOW frames, overlapping).
+                        let start = r.len() - WINDOW * 2;
+                        for i in 0..WINDOW {
+                            block[i] = (r[start + 2 * i] + r[start + 2 * i + 1]) * 0.5;
+                        }
+                        // Snapshot the last WAVE stereo frames for the scope.
+                        let ws = r.len().saturating_sub(WAVE * 2);
+                        for (i, s) in r.iter().skip(ws).take(WAVE * 2).enumerate() {
+                            wave[i] = *s;
+                        }
+                        if let Ok(mut w) = shared.waveform.lock() {
+                            *w = wave.clone();
                         }
                         true
                     } else {
