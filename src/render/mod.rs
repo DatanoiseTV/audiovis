@@ -10,6 +10,7 @@ pub mod generators;
 pub mod gl;
 pub mod pipeline;
 pub mod post;
+pub mod sim;
 
 pub use gl::GlslFlavor;
 
