@@ -13,6 +13,7 @@ mod engine;
 mod params;
 mod presets;
 mod render;
+mod script;
 mod version;
 mod web;
 

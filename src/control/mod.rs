@@ -68,6 +68,14 @@ pub enum ControlEvent {
     SetMidiPort(String),
     /// Re-scan the media directory for newly added image/SVG files.
     RescanMedia,
+
+    // --- JS scripting (handled by the window backend) ---
+    /// Compile + run a new script source live (without saving).
+    SetScript(String),
+    /// Save the source as a named script, then run it.
+    SaveScript { name: String, source: String },
+    /// Load a named script (builtin or user), run it and echo it to the UI.
+    LoadScript(String),
 }
 
 /// Owns the channel endpoints. Sources clone the [`Sender`]; the engine holds
