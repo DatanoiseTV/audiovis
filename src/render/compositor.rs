@@ -14,9 +14,10 @@ use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program, RenderT
 use super::media::MediaBank;
 use super::sim::SimBank;
 
-/// How many layers the stack exposes. Three is a good live balance: a base, a
-/// texture/pattern, and an accent - without overwhelming the control surface.
-pub const NUM_LAYERS: usize = 3;
+/// How many generator layer slots the stack exposes. The web UI presents these
+/// as a dynamic stack (add/remove), and inactive layers (opacity 0) cost
+/// nothing; simulation state is allocated lazily so unused slots stay cheap.
+pub const NUM_LAYERS: usize = 8;
 
 /// Number of blend modes (must match `blend.frag`).
 const NUM_BLENDS: i64 = 5;
@@ -45,8 +46,9 @@ pub struct Compositor {
     /// Image/SVG input layers, blended over the generator stack.
     media: MediaBank,
     layer_targets: Vec<RenderTexture>,
-    /// Per-layer simulation state (only used while a layer runs a stateful gen).
-    state: Vec<PingPong>,
+    /// Per-layer simulation state, allocated lazily the first time a layer runs
+    /// a stateful generator (so a stack of mostly-stateless layers stays cheap).
+    state: Vec<Option<PingPong>>,
     /// Last generator index seen per layer, to detect a switch and reseed.
     last_gen: Vec<i64>,
     acc: PingPong,
@@ -118,17 +120,11 @@ impl Compositor {
 
         let (w, h) = (width.max(1), height.max(1));
         let mut layer_targets = Vec::with_capacity(NUM_LAYERS);
-        let mut state = Vec::with_capacity(NUM_LAYERS);
-        let mut float_state = true;
         for _ in 0..NUM_LAYERS {
             layer_targets.push(RenderTexture::new(gl, w, h)?);
-            let (pp, is_float) = PingPong::new_sim(gl, w, h);
-            float_state &= is_float;
-            state.push(pp);
         }
-        if !float_state {
-            tracing::warn!("float render targets unavailable; simulations run at 8-bit precision");
-        }
+        // Simulation state is allocated on first use (see `render`).
+        let state = (0..NUM_LAYERS).map(|_| None).collect();
         let acc = PingPong::new(gl, w, h)?;
 
         Ok(Self {
@@ -173,11 +169,10 @@ impl Compositor {
             return Ok(());
         }
         self.layer_targets.clear();
-        self.state.clear();
         for _ in 0..NUM_LAYERS {
             self.layer_targets.push(RenderTexture::new(&self.gl, w, h)?);
-            self.state.push(PingPong::new_sim(&self.gl, w, h).0);
         }
+        self.state = (0..NUM_LAYERS).map(|_| None).collect(); // realloc lazily at the new size
         self.last_gen = vec![-1; NUM_LAYERS]; // force reseed at the new size
         self.acc = PingPong::new(&self.gl, w, h)?;
         self.width = w;
@@ -234,21 +229,24 @@ impl Compositor {
                 self.last_gen[i] = gen as i64;
             } else {
                 // Stateful simulation: (re)seed on selection, step, then render.
+                // Allocate this layer's sim state the first time it is needed.
                 let sim = gen - stateless;
+                let (w, h, gl) = (self.width, self.height, self.gl.clone());
+                let st = self.state[i].get_or_insert_with(|| PingPong::new_sim(&gl, w, h).0);
                 if self.last_gen[i] != gen as i64 {
-                    self.state[i].write_target().bind_as_target();
+                    st.write_target().bind_as_target();
                     self.sim_bank.seed(sim, quad, &u);
-                    self.state[i].swap();
+                    st.swap();
                     self.last_gen[i] = gen as i64;
                 }
                 let texel = (1.0 / self.width as f32, 1.0 / self.height as f32);
                 for _ in 0..self.sim_bank.iters(sim) {
-                    self.state[i].write_target().bind_as_target();
-                    self.sim_bank.step(sim, quad, self.state[i].read(), &u, texel);
-                    self.state[i].swap();
+                    st.write_target().bind_as_target();
+                    self.sim_bank.step(sim, quad, st.read(), &u, texel);
+                    st.swap();
                 }
                 self.layer_targets[i].bind_as_target();
-                self.sim_bank.render(sim, quad, self.state[i].read(), &u, texel);
+                self.sim_bank.render(sim, quad, st.read(), &u, texel);
             }
         }
 

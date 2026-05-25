@@ -447,3 +447,12 @@ select, input[type=text] { padding: 4px 6px; font-size: 12px; }
 .scriptbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .scriptbar .scriptname { width: 130px; }
 .scriptbar select { max-width: 200px; }
+
+/* layer remove (x) button in the card header */
+.rmlayer {
+  margin-left: auto; padding: 0 7px; line-height: 1.4; font-size: 14px;
+  color: var(--text-dim); border-color: var(--line2);
+}
+.rmlayer:hover { color: #000; background: var(--magenta); border-color: var(--magenta); box-shadow: none; }
+#addlayer { color: var(--cyan); border-color: rgba(53,224,216,0.4); }
+#addlayer:disabled { opacity: 0.4; cursor: not-allowed; }

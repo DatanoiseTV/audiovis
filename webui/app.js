@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-26";
+const UI_BUILD = "ui-27";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -42,6 +42,8 @@ let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
 let mediaSourceSelects = []; // {sel, fill} for live source-dropdown refresh
 let mediaDeck = 0;           // which media layer the browser loads into
 let scriptNames = [];        // available script names (builtins + user)
+let layerCards = {};         // layer index -> its card element (dynamic stack)
+const MAX_LAYERS = 8;        // must match the compositor's NUM_LAYERS
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
@@ -88,6 +90,8 @@ function setupTransport() {
 
   const bo = document.getElementById("blackout");
   bo.onclick = () => toggleBlackout();
+  const al = document.getElementById("addlayer");
+  if (al) al.onclick = () => addLayer();
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); toggleBlackout(); }
   });
@@ -224,6 +228,7 @@ function buildUI(schema) {
 
   main.appendChild(buildMonitor()); // live output monitor up top, Resolume-style
   main.appendChild(buildMediaBrowser()); // clip-style media library grid
+  layerCards = {};
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
@@ -232,15 +237,73 @@ function buildUI(schema) {
     const h = el("h2", null, name);
     h.onclick = () => sec.classList.toggle("collapsed"); // click a header to fold it
     sec.appendChild(h);
+    // Generator layers are a dynamic stack: tag the card and add a remove (x).
+    const lm = name.match(/^Layer (\d+)$/);
+    if (lm) {
+      const idx = parseInt(lm[1], 10) - 1;
+      sec.dataset.layer = idx;
+      layerCards[idx] = sec;
+      const rm = el("button", "btn rmlayer", "×");
+      rm.title = "remove this layer";
+      rm.onclick = (e) => { e.stopPropagation(); removeLayer(idx); };
+      h.appendChild(rm);
+    }
     for (const spec of groups.get(name)) sec.appendChild(buildRow(spec));
     if (name === "LFO") sec.appendChild(buildLfoScopes());
     main.appendChild(sec);
   }
+  refreshLayers();
   main.appendChild(buildDevices());
   main.appendChild(buildScript());
   main.appendChild(buildMappings());
   main.appendChild(buildMatrix());
   main.appendChild(buildPresets());
+}
+
+// --- dynamic layer stack (add / remove) ---
+
+// A layer is "active" (and shown) if it has any opacity; layer 0 is always on.
+function layerActive(i) {
+  if (i === 0) return true;
+  const op = paramValues.get(`layer.${i}.opacity`);
+  return !!op && op.value > 0.001;
+}
+
+// Show only active layer cards; activate the next free one on "+ Layer".
+function refreshLayers() {
+  let active = 0;
+  for (let i = 0; i < MAX_LAYERS; i++) {
+    const card = layerCards[i];
+    if (!card) continue;
+    const on = layerActive(i);
+    card.style.display = on ? "" : "none";
+    if (on) active++;
+  }
+  const add = document.getElementById("addlayer");
+  if (add) add.disabled = active >= MAX_LAYERS;
+}
+
+function addLayer() {
+  for (let i = 1; i < MAX_LAYERS; i++) {
+    if (!layerActive(i)) {
+      sendRaw(`layer.${i}.generator`, i % generators.length); // a non-blank default
+      sendRaw(`layer.${i}.blend`, 1); // add, so it shows over the stack
+      sendNorm(`layer.${i}.opacity`, 1.0);
+      // Reveal immediately; the echoed value keeps it shown.
+      if (layerCards[i]) layerCards[i].style.display = "";
+      paramValues.set(`layer.${i}.opacity`, { value: 1, norm: 1 });
+      refreshLayers();
+      return;
+    }
+  }
+}
+
+function removeLayer(i) {
+  if (i === 0) return; // keep the base layer
+  sendNorm(`layer.${i}.opacity`, 0.0);
+  paramValues.set(`layer.${i}.opacity`, { value: 0, norm: 0 });
+  if (layerCards[i]) layerCards[i].style.display = "none";
+  refreshLayers();
 }
 
 // --- live LFO shape previews ---
@@ -949,6 +1012,8 @@ function applyChange(c) {
   }
   // Reflect a deck's loaded clip in the media browser highlight.
   if (c.path === `media.${mediaDeck}.source`) renderMediaGrid();
+  // A layer's opacity arriving (e.g. from a preset) toggles its card.
+  if (/^layer\.\d+\.opacity$/.test(c.path)) refreshLayers();
 }
 
 function applyTelemetry(t) {
