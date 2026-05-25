@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <g stroke="#35e0d8" stroke-width="2" opacity="0.9">
+    <path d="M16 16H240V240H16Z" fill="none" stroke-width="4"/>
+    <path d="M48 16V240 M80 16V240 M112 16V240 M144 16V240 M176 16V240 M208 16V240"/>
+    <path d="M16 48H240 M16 80H240 M16 112H240 M16 144H240 M16 176H240 M16 208H240"/>
+  </g>
+  <circle cx="128" cy="128" r="6" fill="#ff3ea5"/>
+</svg>
