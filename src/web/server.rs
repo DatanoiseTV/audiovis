@@ -135,6 +135,8 @@ fn initial_state(state: &AppState) -> Vec<u8> {
         mod_sources: s.mod_sources.clone(),
         mod_routes: s.mod_routes.clone(),
         mod_routes_present: true,
+        presets: s.presets.clone(),
+        current_preset: s.current_preset.clone(),
     };
     msg.encode_to_vec()
 }

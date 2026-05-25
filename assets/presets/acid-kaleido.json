@@ -1,0 +1,15 @@
+{"version":1,"name":"acid-kaleido","params":{
+  "layer.0.generator":{"type":"int","value":3},
+  "layer.0.opacity":{"type":"float","value":1.0},
+  "layer.0.warp":{"type":"float","value":0.4},
+  "layer.0.scale":{"type":"float","value":1.2},
+  "post.mirror.enable":{"type":"bool","value":true},
+  "post.mirror.mode":{"type":"int","value":3},
+  "post.hue.enable":{"type":"bool","value":true},
+  "post.hue.rate":{"type":"float","value":0.05},
+  "post.bloom.enable":{"type":"bool","value":true},
+  "post.bloom.amount":{"type":"float","value":0.6}
+},"mappings":[],"mod_routes":[
+  {"source":"audio.mid","target":"layer.0.warp","amount":0.5,"smooth":0.2},
+  {"source":"lfo.2","target":"layer.0.p1","amount":0.4,"smooth":0.0}
+]}

@@ -65,6 +65,10 @@ message ServerMsg {
   // repeated fields on the wire).
   repeated ModRoute mod_routes = 7;
   bool mod_routes_present = 8;
+  // Available preset names (builtins + user), sent on connect and after a save.
+  repeated string presets = 9;
+  // Name of the preset currently loaded, for highlighting in the browser.
+  string current_preset = 10;
 }
 
 // --- Client -> server ---

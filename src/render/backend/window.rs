@@ -23,8 +23,9 @@ use std::sync::Arc;
 
 use crate::audio::AudioShared;
 use crate::cli::Cli;
-use crate::control::ControlBus;
+use crate::control::{ControlBus, ControlEvent};
 use crate::engine::Engine;
+use crate::presets::PresetStore;
 use crate::web::WebHandle;
 use crate::render::gl::{self, Gl};
 use crate::render::pipeline::Pipeline;
@@ -51,6 +52,8 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>, w
         bus,
         audio,
         web,
+        presets: PresetStore::new(),
+        current_preset: String::new(),
         gfx: None,
         start: Instant::now(),
         last: Instant::now(),
@@ -76,6 +79,8 @@ struct WindowApp {
     bus: ControlBus,
     audio: Arc<AudioShared>,
     web: Option<WebHandle>,
+    presets: PresetStore,
+    current_preset: String,
     gfx: Option<Gfx>,
     start: Instant,
     last: Instant,
@@ -139,19 +144,25 @@ impl WindowApp {
             .map_err(|e| anyhow!("pipeline init failed: {e}"))?;
 
         // The pipeline has now registered all layer/effect parameters, so a
-        // startup preset can safely resolve their paths.
-        if let Some(preset) = self.cli.preset.clone() {
-            if let Err(e) = self.engine.load_preset(&preset) {
-                tracing::warn!("could not load preset {preset}: {e:#}");
+        // preset can safely resolve their paths. Priority: an explicit
+        // --preset file, else the last-used preset, else the "init" builtin.
+        if let Some(path) = self.cli.preset.clone() {
+            if let Err(e) = self.engine.load_preset(&path) {
+                tracing::warn!("could not load preset {path}: {e:#}");
             }
+        } else {
+            let startup = self.presets.last().filter(|n| self.presets.load(n).is_some());
+            let name = startup.unwrap_or_else(|| "init".to_string());
+            self.load_preset_named(&name);
         }
 
-        // Publish the now-complete parameter schema to the web UI.
+        // Publish the now-complete parameter schema + preset list to the web UI.
         if let Some(web) = &self.web {
             // Generators and simulations share the layer.N.generator index space.
             let mut generators: Vec<String> = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
             generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
             web.set_schema(&self.engine, generators);
+            web.publish_presets(self.presets.list(), &self.current_preset);
         }
 
         tracing::info!("window backend up: {}x{} GL 3.3 Core via {}", w, h, renderer_name(&gl));
@@ -160,12 +171,51 @@ impl WindowApp {
         Ok(())
     }
 
+    /// Load a preset by name (user file or builtin), remember it as the last,
+    /// and tell the web UI which one is current.
+    fn load_preset_named(&mut self, name: &str) {
+        match self.presets.load(name) {
+            Some(preset) => {
+                self.engine.apply_preset(&preset);
+                self.presets.set_last(name);
+                self.current_preset = name.to_string();
+                tracing::info!("loaded preset '{name}'");
+                if let Some(web) = &self.web {
+                    web.publish_presets(self.presets.list(), &self.current_preset);
+                }
+            }
+            None => tracing::warn!("preset '{name}' not found"),
+        }
+    }
+
+    /// Save the current state as a named user preset and refresh the list.
+    fn save_preset_named(&mut self, name: &str) {
+        let preset = self.engine.to_preset(name);
+        match self.presets.save(name, &preset) {
+            Ok(()) => {
+                self.presets.set_last(name);
+                self.current_preset = name.to_string();
+                tracing::info!("saved preset '{name}'");
+                if let Some(web) = &self.web {
+                    web.publish_presets(self.presets.list(), &self.current_preset);
+                }
+            }
+            Err(e) => tracing::warn!("could not save preset '{name}': {e:#}"),
+        }
+    }
+
     /// One rendered frame: pump control input, advance time, draw, present.
     fn draw(&mut self, el: &ActiveEventLoop) {
         // Drain queued control events into the authoritative engine state.
+        // Preset load/save are resolved by name against the preset store rather
+        // than the engine's path-based handling.
         let events: Vec<_> = self.bus.drain().collect();
         for ev in events {
-            self.engine.handle(ev);
+            match ev {
+                ControlEvent::LoadPreset(name) => self.load_preset_named(&name),
+                ControlEvent::SavePreset(name) => self.save_preset_named(&name),
+                other => self.engine.handle(other),
+            }
         }
 
         let now = Instant::now();

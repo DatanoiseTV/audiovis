@@ -1,0 +1,6 @@
+{"version":1,"name":"init","params":{
+  "global.brightness":{"type":"float","value":1.0},
+  "layer.0.generator":{"type":"int","value":0},
+  "layer.0.opacity":{"type":"float","value":1.0},
+  "post.vhs.enable":{"type":"bool","value":true}
+},"mappings":[],"mod_routes":[]}

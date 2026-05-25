@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-11";
+const UI_BUILD = "ui-12";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -34,6 +34,8 @@ let generators = [];
 let modSources = [];
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
+let presetList = [];
+let currentPreset = "";
 
 // LFO division lengths in beats (must match Rust LFO_DIVISIONS).
 const DIV_BEATS = [32, 16, 8, 4, 2, 1, 0.5, 0.25];
@@ -127,6 +129,9 @@ function connect() {
       if (msg.changes) for (const c of msg.changes) applyChange(c);
       if (msg.telemetry) applyTelemetry(msg.telemetry);
       if (msg.mod_routes_present) renderRoutes(msg.mod_routes || []);
+      if (msg.current_preset) currentPreset = msg.current_preset;
+      if (msg.presets && msg.presets.length) { presetList = msg.presets; renderPresets(); }
+      else if (msg.current_preset) renderPresets();
     } catch (e) {
       console.error("decode error", e);
     }
@@ -187,7 +192,7 @@ function buildUI(schema) {
     main.appendChild(sec);
   }
   main.appendChild(buildMatrix());
-  main.appendChild(buildPresetBar());
+  main.appendChild(buildPresets());
 }
 
 // --- live LFO shape previews ---
@@ -493,16 +498,32 @@ function buildRow(spec) {
   return row;
 }
 
-function buildPresetBar() {
-  const sec = el("div", "group");
-  sec.appendChild(el("h2", null, "Preset"));
+let presetListEl = null;
+
+function buildPresets() {
+  const sec = el("div", "group matrix");
+  sec.appendChild(el("h2", null, "Presets"));
+  presetListEl = el("div", "presetlist");
+  sec.appendChild(presetListEl);
+
   const bar = el("div", "preset-bar");
-  const input = el("input"); input.type = "text"; input.placeholder = "presets/my.json"; input.value = "presets/live.json";
-  const save = el("button", "btn", "save"); save.onclick = () => sendPreset("save", input.value);
-  const load = el("button", "btn", "load"); load.onclick = () => sendPreset("load", input.value);
-  bar.append(input, save, load);
+  const input = el("input"); input.type = "text"; input.placeholder = "name to save"; input.id = "preset-name";
+  const save = el("button", "btn", "save as");
+  save.onclick = () => { if (input.value.trim()) sendPreset("save", input.value.trim()); };
+  bar.append(input, save);
   sec.appendChild(bar);
+  renderPresets();
   return sec;
+}
+
+function renderPresets() {
+  if (!presetListEl) return;
+  presetListEl.innerHTML = "";
+  for (const name of presetList) {
+    const b = el("button", "btn preset" + (name === currentPreset ? " active" : ""), name);
+    b.onclick = () => sendPreset("load", name);
+    presetListEl.appendChild(b);
+  }
 }
 
 function setArmed(path) {
