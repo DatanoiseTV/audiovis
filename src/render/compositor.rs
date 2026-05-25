@@ -59,6 +59,8 @@ pub struct Compositor {
     beat: f32,
     /// Waveform texture for the scope generator (owned by the pipeline).
     wave_tex: Option<glow::Texture>,
+    /// Pixel-buffer texture for the script generator (owned by the pipeline).
+    script_tex: Option<glow::Texture>,
 }
 
 impl Compositor {
@@ -145,12 +147,18 @@ impl Compositor {
             audio: (0.0, 0.0, 0.0),
             beat: 0.0,
             wave_tex: None,
+            script_tex: None,
         })
     }
 
     /// Set the waveform texture sampled by the scope generator.
     pub fn set_wave_tex(&mut self, tex: glow::Texture) {
         self.wave_tex = Some(tex);
+    }
+
+    /// Set the pixel-buffer texture sampled by the script generator.
+    pub fn set_script_tex(&mut self, tex: glow::Texture) {
+        self.script_tex = Some(tex);
     }
 
     pub fn generator_count(&self) -> usize {
@@ -219,7 +227,10 @@ impl Compositor {
             let stateless = self.bank.len();
             if gen < stateless {
                 self.layer_targets[i].bind_as_target();
-                self.bank.draw(gen, quad, &u, self.wave_tex.unwrap_or(self.layer_targets[i].texture()));
+                // The script generator samples the script pixel buffer; every
+                // other generator that wants a texture gets the waveform.
+                let aux = if GeneratorBank::name(gen) == "script" { self.script_tex } else { self.wave_tex };
+                self.bank.draw(gen, quad, &u, aux.unwrap_or(self.layer_targets[i].texture()));
                 self.last_gen[i] = gen as i64;
             } else {
                 // Stateful simulation: (re)seed on selection, step, then render.

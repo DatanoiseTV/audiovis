@@ -27,6 +27,8 @@ pub struct Pipeline {
     text: TextOverlay,
     /// Waveform texture (256x1, R=L G=R) uploaded each frame for the scope.
     wave_tex: glow::Texture,
+    /// Pixel-buffer texture the JS script draws into (nearest-filtered).
+    script_tex: glow::Texture,
     /// Small target the final frame is copied into for the web monitor.
     preview: RenderTexture,
     render_scale: f32,
@@ -51,6 +53,8 @@ impl Pipeline {
         let text = TextOverlay::new(gl, flavor)?;
         let wave_tex = gl::make_texture(gl, WAVE as i32, 1, None, false);
         compositor.set_wave_tex(wave_tex);
+        let script_tex = gl::make_texture(gl, crate::script::SCRIPT_W as i32, crate::script::SCRIPT_H as i32, None, true);
+        compositor.set_script_tex(script_tex);
         let preview = RenderTexture::new(gl, PREVIEW_W, PREVIEW_H)?;
         Ok(Self {
             gl: gl.clone(),
@@ -59,6 +63,7 @@ impl Pipeline {
             post,
             text,
             wave_tex,
+            script_tex,
             preview,
             render_scale: scale,
             out_w: width.max(1),
@@ -95,6 +100,12 @@ impl Pipeline {
             bytes[i * 4 + 3] = 255;
         }
         gl::update_texture(&self.gl, self.wave_tex, n as i32, 1, &bytes);
+    }
+
+    /// Upload the JS script's RGBA pixel buffer (SCRIPT_W x SCRIPT_H) for the
+    /// script generator to display.
+    pub fn set_script_buffer(&self, rgba: &[u8]) {
+        gl::update_texture(&self.gl, self.script_tex, crate::script::SCRIPT_W as i32, crate::script::SCRIPT_H as i32, rgba);
     }
 
     /// Number of generators available, for the UI.

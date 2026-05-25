@@ -59,6 +59,8 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("bobs", "shaders/gen/bobs.frag"),
     gen!("scope", "shaders/gen/scope.frag"),
     gen!("wireframe", "shaders/gen/wireframe.frag"),
+    // Displays the JS script's 2D pixel buffer (fed on the u_wave unit).
+    gen!("script", "shaders/gen/script.frag"),
 ];
 
 /// The values fed to a generator for one draw.
