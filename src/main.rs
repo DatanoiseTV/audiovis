@@ -116,7 +116,7 @@ fn seed_demo_params(engine: &mut Engine) {
     p.register(ParamSpec::new("text.posx", "Pos X", "Text", ParamKind::Float { min: -1.0, max: 1.0, default: 0.0 }));
     p.register(ParamSpec::new("text.posy", "Pos Y", "Text", ParamKind::Float { min: -1.0, max: 1.0, default: 0.0 }));
     p.register(ParamSpec::new("text.hue", "Hue", "Text", ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 }));
-    p.register(ParamSpec::new("text.font", "Font", "Text", ParamKind::Int { min: 0, max: 3, default: 0 }));
+    p.register(ParamSpec::new("text.font", "Font", "Text", ParamKind::Int { min: 0, max: 6, default: 4 }));
     // fx: 0 none, 1 dissolve, 2 wave, 3 tear, 4 scanlines
     p.register(ParamSpec::new("text.fx", "FX", "Text", ParamKind::Int { min: 0, max: 4, default: 0 }));
     p.register(ParamSpec::new("text.fxamt", "FX amt", "Text", ParamKind::Float { min: 0.0, max: 1.0, default: 0.5 }));
