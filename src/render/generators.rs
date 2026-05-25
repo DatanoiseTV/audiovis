@@ -58,6 +58,7 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("wormhole", "shaders/gen/wormhole.frag"),
     gen!("bobs", "shaders/gen/bobs.frag"),
     gen!("scope", "shaders/gen/scope.frag"),
+    gen!("wireframe", "shaders/gen/wireframe.frag"),
 ];
 
 /// The values fed to a generator for one draw.
