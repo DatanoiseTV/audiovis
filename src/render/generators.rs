@@ -57,6 +57,7 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("clouds", "shaders/gen/clouds.frag"),
     gen!("wormhole", "shaders/gen/wormhole.frag"),
     gen!("bobs", "shaders/gen/bobs.frag"),
+    gen!("scope", "shaders/gen/scope.frag"),
 ];
 
 /// The values fed to a generator for one draw.
@@ -131,12 +132,14 @@ impl GeneratorBank {
     }
 
     /// Bind the generator at `index`, upload uniforms and draw the quad. The
-    /// caller has already bound the target framebuffer.
-    pub fn draw(&self, index: usize, quad: &FullscreenQuad, u: &CommonUniforms) {
+    /// caller has already bound the target framebuffer. `wave` is the waveform
+    /// texture (sampled by the scope generator).
+    pub fn draw(&self, index: usize, quad: &FullscreenQuad, u: &CommonUniforms, wave: glow::Texture) {
         let i = index.min(self.programs.len().saturating_sub(1));
         let p = &self.programs[i];
         p.bind();
         apply_common(p, u);
+        p.set_texture("u_wave", 2, wave);
         quad.draw();
     }
 }
