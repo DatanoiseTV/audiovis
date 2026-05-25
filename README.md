@@ -34,6 +34,16 @@ framebuffer — no X11, no Wayland, no pre-rendered clips.
 *Sixteen builtin presets ship in the binary; the last-used one auto-loads on
 launch. All frames here are generated live (no audio input).*
 
+## Web control surface
+
+A dense, dark instrument surface served straight from the binary — per-layer
+decks, the media layers, the effects rack, audio analyzer, the I/O picker, the
+modulation grid and a **live output monitor** that floats over the page (drag it
+anywhere, resize it from the corner, fold it away). Everything is two-way synced
+over a protobuf websocket.
+
+![web UI](docs/img/webui.png)
+
 ## Generators
 
 38 of them — procedural fields, demoscene classics, fractals, a stereo scope, a
@@ -51,6 +61,15 @@ Composited layers run through a chain of toggleable, modulatable effects:
 
 ![effects](docs/img/fx.png)
 
+## Media layers
+
+Two extra layers load your own **images (PNG/JPG)** or **SVG** from a `media/`
+folder and composite them over the generators with the same transform vocabulary
+(zoom / rotate / pan), plus hue, brightness, opacity and blend mode. SVGs are
+rasterised once on load; the picker in the web UI lists whatever you drop in.
+
+![media layer](docs/img/media.png)
+
 ## Everything is modulated
 
 A **grid patchbay** routes signal sources onto any parameter, with per-route
@@ -67,13 +86,21 @@ pixel fonts and text FX (dissolve / wave / tear / scanlines) — round it out.
 
 ## Control
 
-- **Web UI** at `http://<host>:8080` — a live surface (master + blackout, per-
-  layer decks, effects rack, modulation grid, LFO scopes, preset & lettering
-  panels, MIDI map), two-way synced over a protobuf websocket.
+- **Web UI** at `http://<host>:8080` — the surface above: master + blackout, the
+  decks, effects rack, modulation grid, LFO scopes, preset & lettering panels,
+  MIDI map and the floating output monitor, two-way synced over a protobuf
+  websocket.
 - **MIDI** — notes / CC / clock; opens a virtual port ("audiovis") and
-  auto-connects hardware; per-control **learn**.
+  auto-connects hardware; per-control **learn**. Pick the hardware port live
+  from the I/O panel.
 - **OSC** — `/p/<param.path> <value>` sets anything; other addresses are
   learnable.
+- **Audio in** — choose the input device in the I/O panel and tune the analyzer
+  live (gain, attack, release, beat sensitivity); they double as modulation
+  targets.
+- **Fullscreen** — press **F** in the render window to toggle borderless
+  fullscreen on the monitor it is currently on (drag it to an external display
+  first, then F).
 
 ## Build & run
 
