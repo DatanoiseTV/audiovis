@@ -1,0 +1,7 @@
+{"version":1,"name":"lettering","params":{
+ "layer.0.generator":{"type":"int","value":2},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.warp":{"type":"float","value":0.4},"layer.0.hue":{"type":"float","value":0.6},
+ "post.vhs.enable":{"type":"bool","value":true},"post.bloom.enable":{"type":"bool","value":true},"post.bloom.amount":{"type":"float","value":0.4},
+ "text.font":{"type":"int","value":6},"text.fx":{"type":"int","value":1},"text.fxamt":{"type":"float","value":0.6},"text.size":{"type":"float","value":0.16},"text.hue":{"type":"float","value":0.0}
+},"mappings":[],"mod_routes":[
+ {"source":"lfo.2","target":"text.hue","amount":0.5,"smooth":0.0}
+],"text":["PIXELFLOWERS","BERLIN","TECHNO","ACID","TRANSMISSION","////","NO PHOTOS","LOVE"]}

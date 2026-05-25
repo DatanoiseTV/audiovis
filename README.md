@@ -30,6 +30,12 @@ C.H.I.P. — rendering straight to the framebuffer with no X11 or Wayland.
 <td><img src="docs/img/vhs-dream.png" width="220"><br><sub>vhs-dream</sub></td>
 <td><img src="docs/img/init.png" width="220"><br><sub>init</sub></td>
 </tr>
+<tr>
+<td><img src="docs/img/wireframe.png" width="220"><br><sub>wireframe</sub></td>
+<td><img src="docs/img/vectorscope.png" width="220"><br><sub>vectorscope</sub></td>
+<td><img src="docs/img/oscillo.png" width="220"><br><sub>oscillo</sub></td>
+<td></td>
+</tr>
 </table>
 
 *All frames are generated live; these are the bundled presets, captured at a

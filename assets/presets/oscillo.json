@@ -1,0 +1,8 @@
+{"version":1,"name":"oscillo","params":{
+ "layer.0.generator":{"type":"int","value":33},"layer.0.opacity":{"type":"float","value":1.0},"layer.0.p1":{"type":"float","value":1.0},"layer.0.p2":{"type":"float","value":0.35},"layer.0.hue":{"type":"float","value":0.35},
+ "layer.1.generator":{"type":"int","value":27},"layer.1.opacity":{"type":"float","value":0.3},"layer.1.blend":{"type":"int","value":1},
+ "post.bloom.enable":{"type":"bool","value":true},"post.bloom.amount":{"type":"float","value":0.55},
+ "post.vhs.enable":{"type":"bool","value":true},"post.vhs.vignette":{"type":"float","value":0.5}
+},"mappings":[],"mod_routes":[
+ {"source":"audio.mid","target":"layer.0.hue","amount":0.3,"smooth":0.2}
+],"text":[]}
