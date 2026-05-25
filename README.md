@@ -36,11 +36,12 @@ launch. All frames here are generated live (no audio input).*
 
 ## Web control surface
 
-A dense, dark instrument surface served straight from the binary — per-layer
-decks, the media layers, the effects rack, audio analyzer, the I/O picker, the
-modulation grid and a **live output monitor** that floats over the page (drag it
-anywhere, resize it from the corner, fold it away). Everything is two-way synced
-over a protobuf websocket.
+A dense, dark instrument surface served straight from the binary — a clip-style
+**media browser** that loads any image/SVG into the media decks, per-layer decks,
+the effects rack, audio analyzer, the I/O picker, the modulation grid and a
+**live output monitor** that floats over the page (drag it anywhere, resize it
+from the corner, fold it away). Everything is two-way synced over a protobuf
+websocket.
 
 ![web UI](docs/img/webui.png)
 
@@ -66,7 +67,8 @@ Composited layers run through a chain of toggleable, modulatable effects:
 Two extra layers load your own **images (PNG/JPG)** or **SVG** from a `media/`
 folder and composite them over the generators with the same transform vocabulary
 (zoom / rotate / pan), plus hue, brightness, opacity and blend mode. SVGs are
-rasterised once on load; the picker in the web UI lists whatever you drop in.
+rasterised once on load. Drop files into `media/`, hit **Rescan** in the web
+UI's media browser and click a thumbnail to load it into a deck.
 
 ![media layer](docs/img/media.png)
 

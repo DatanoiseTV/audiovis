@@ -389,3 +389,39 @@ select, input[type=text] { padding: 4px 6px; font-size: 12px; }
 /* I/O panel: same accent family as Audio, sits with the global controls. */
 .group.io { border-color: rgba(255, 179, 71, 0.3); }
 .group.io h2 { color: var(--amber); }
+
+/* ============================================================
+   MEDIA BROWSER - a clip-bank grid of media thumbnails
+   ============================================================ */
+.mediabrowser .mbbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mediabrowser .mbbar .gl { color: var(--text-dim); font-size: 11px; }
+.mediabrowser .deckbtn.on { color: #000; background: var(--cyan); border-color: var(--cyan); box-shadow: var(--glow-cyan); }
+.mbgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 8px;
+}
+.clip {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: #0c0c14;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.08s;
+}
+.clip:hover { border-color: var(--cyan); transform: translateY(-1px); }
+.clip.on { border-color: var(--cyan); box-shadow: var(--glow-cyan), 0 0 0 1px var(--cyan) inset; }
+.clip img {
+  width: 100%; height: 100%; object-fit: contain;
+  background: repeating-linear-gradient(45deg, #0a0a12 0 7px, #0d0d18 7px 14px);
+}
+.clip .cliplbl {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 2px 5px; font-size: 10px; color: var(--text);
+  background: linear-gradient(0deg, rgba(0,0,0,0.85), transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.clip.clear { display: flex; align-items: center; justify-content: center; }
+.clip.clear .cliplbl { position: static; background: none; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }

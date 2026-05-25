@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-23";
+const UI_BUILD = "ui-24";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -39,6 +39,8 @@ let generators = [];
 let mediaFiles = ["(none)"];
 let modSources = [];
 let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
+let mediaSourceSelects = []; // {sel, fill} for live source-dropdown refresh
+let mediaDeck = 0;           // which media layer the browser loads into
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
@@ -137,6 +139,10 @@ function connect() {
         if (msg.media && msg.media.length) mediaFiles = msg.media;
         if (msg.mod_sources && msg.mod_sources.length) modSources = msg.mod_sources;
         buildUI(msg.schema);
+      } else if (msg.media && msg.media.length) {
+        // media-only update (a rescan picked up new files)
+        mediaFiles = msg.media;
+        onMediaListChanged();
       }
       if (msg.changes) for (const c of msg.changes) applyChange(c);
       if (msg.telemetry) applyTelemetry(msg.telemetry);
@@ -199,6 +205,7 @@ function groupOrder(name) {
 function buildUI(schema) {
   for (const s of schema) specsByPath.set(s.path, s);
   widgets.clear();
+  mediaSourceSelects = [];
   const main = document.getElementById("groups");
   main.innerHTML = "";
 
@@ -209,6 +216,7 @@ function buildUI(schema) {
   }
 
   main.appendChild(buildMonitor()); // live output monitor up top, Resolume-style
+  main.appendChild(buildMediaBrowser()); // clip-style media library grid
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
@@ -498,11 +506,13 @@ function buildRow(spec) {
     widget = { set: (v) => t.classList.toggle("on", v >= 0.5) };
   } else if (spec.kind === "int" && intOptions(spec.path)) {
     const sel = el("select");
-    const opts = intOptions(spec.path);
-    opts.forEach((nm, i) => { const o = el("option", null, nm); o.value = i; sel.appendChild(o); });
+    const fill = () => { sel.innerHTML = ""; intOptions(spec.path).forEach((nm, i) => { const o = el("option", null, nm); o.value = i; sel.appendChild(o); }); };
+    fill();
     sel.onchange = () => sendRaw(spec.path, parseInt(sel.value, 10));
     mid.appendChild(sel);
     val.style.display = "none";
+    // Media source dropdowns are refreshed live when the file list changes.
+    if (spec.path.endsWith(".source")) mediaSourceSelects.push({ sel, fill });
     widget = { set: (v) => { sel.value = Math.round(v); } };
   } else {
     // float or generic int: a normalised slider, value display shows raw.
@@ -574,6 +584,77 @@ function buildLettering(specs) {
     sec.appendChild(buildRow(spec));
   }
   return sec;
+}
+
+// --- media browser (clip-style library that loads into the media decks) ---
+
+let mediaGridEl = null;
+
+// A grid of thumbnails for everything in the media folder; click a tile to load
+// it into the selected media deck (Media 1 / Media 2), like a clip bank.
+function buildMediaBrowser() {
+  const sec = el("div", "group matrix mediabrowser");
+  const h = el("h2", null, "Media browser");
+  h.onclick = (e) => { if (e.target === h) sec.classList.toggle("collapsed"); };
+  sec.appendChild(h);
+
+  const bar = el("div", "mbbar");
+  bar.appendChild(el("span", "gl", "Load into"));
+  const mk = (label, deck) => {
+    const b = el("button", "btn deckbtn" + (mediaDeck === deck ? " on" : ""), label);
+    b.dataset.deck = deck;
+    b.onclick = () => { mediaDeck = deck; renderDeckBtns(bar); renderMediaGrid(); };
+    return b;
+  };
+  bar.appendChild(mk("Deck 1", 0));
+  bar.appendChild(mk("Deck 2", 1));
+  const spacer = el("span"); spacer.style.flex = "1"; bar.appendChild(spacer);
+  const rescan = el("button", "btn", "Rescan folder");
+  rescan.title = "pick up files you just dropped into the media folder";
+  rescan.onclick = () => send({ rescan_media: true });
+  bar.appendChild(rescan);
+  sec.appendChild(bar);
+
+  mediaGridEl = el("div", "mbgrid");
+  sec.appendChild(mediaGridEl);
+  renderMediaGrid();
+  return sec;
+}
+
+function renderDeckBtns(bar) {
+  bar.querySelectorAll(".deckbtn").forEach((b) => b.classList.toggle("on", +b.dataset.deck === mediaDeck));
+}
+
+// Set the active deck's source to a file index, and reveal it if hidden.
+function loadClip(idx) {
+  sendRaw(`media.${mediaDeck}.source`, idx);
+  const op = paramValues.get(`media.${mediaDeck}.opacity`);
+  if (idx > 0 && (!op || op.value < 0.01)) sendNorm(`media.${mediaDeck}.opacity`, 1.0);
+  setTimeout(renderMediaGrid, 60);
+}
+
+function renderMediaGrid() {
+  if (!mediaGridEl) return;
+  mediaGridEl.innerHTML = "";
+  const cur = Math.round((paramValues.get(`media.${mediaDeck}.source`) || {}).value || 0);
+  const clear = el("div", "clip clear" + (cur === 0 ? " on" : ""));
+  clear.appendChild(el("div", "cliplbl", "none"));
+  clear.onclick = () => loadClip(0);
+  mediaGridEl.appendChild(clear);
+  for (let i = 1; i < mediaFiles.length; i++) {
+    const tile = el("div", "clip" + (cur === i ? " on" : ""));
+    const img = el("img"); img.loading = "lazy"; img.src = "media/" + encodeURIComponent(mediaFiles[i]);
+    tile.appendChild(img);
+    tile.appendChild(el("div", "cliplbl", mediaFiles[i]));
+    tile.onclick = () => loadClip(i);
+    mediaGridEl.appendChild(tile);
+  }
+}
+
+// Called when the server sends a fresh media list (after a rescan).
+function onMediaListChanged() {
+  renderMediaGrid();
+  for (const { fill, sel } of mediaSourceSelects) { const v = sel.value; fill(); sel.value = v; }
 }
 
 // --- live output monitor ---
@@ -790,6 +871,8 @@ function applyChange(c) {
     const m = document.getElementById("master");
     if (m && document.activeElement !== m) m.value = c.norm || 0;
   }
+  // Reflect a deck's loaded clip in the media browser highlight.
+  if (c.path === `media.${mediaDeck}.source`) renderMediaGrid();
 }
 
 function applyTelemetry(t) {
