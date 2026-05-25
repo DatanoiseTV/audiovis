@@ -1,109 +1,99 @@
 # audiovis
 
-A single-binary, live, audio-reactive **VJ visualizer** with a VHS / retro /
-analog-video and demoscene aesthetic. It generates everything algorithmically
-(no pre-rendered clips), reacts to live audio, and is driven in performance over
-**MIDI**, **OSC** and an embedded **web control surface**.
+**A single-binary, live, audio-reactive VJ visualizer** — VHS / analog-video and
+demoscene aesthetics, generated entirely in real time, driven over **MIDI**,
+**OSC** and an embedded **web control surface**.
 
-It runs on a capable desktop (windowed on macOS / Linux) and on very small
-hardware — single-core ~1 GHz ARM boards like the Raspberry Pi Zero or NTC
-C.H.I.P. — rendering straight to the framebuffer with no X11 or Wayland.
+Built for the club: it runs windowed on a desktop and headless on tiny
+single-core ~1 GHz ARM boards (Raspberry Pi Zero, NTC C.H.I.P.) straight to the
+framebuffer — no X11, no Wayland, no pre-rendered clips.
 
-## Gallery
+## Presets
 
 <table>
 <tr>
-<td><img src="docs/img/berlin-tunnel.png" width="220"><br><sub>berlin-tunnel</sub></td>
-<td><img src="docs/img/acid-kaleido.png" width="220"><br><sub>acid-kaleido</sub></td>
-<td><img src="docs/img/smoke-room.png" width="220"><br><sub>smoke-room</sub></td>
-<td><img src="docs/img/mandala-trip.png" width="220"><br><sub>mandala-trip</sub></td>
+<td><img src="docs/img/berlin-tunnel.png" width="200"><br><sub>berlin-tunnel</sub></td>
+<td><img src="docs/img/acid-kaleido.png" width="200"><br><sub>acid-kaleido</sub></td>
+<td><img src="docs/img/smoke-room.png" width="200"><br><sub>smoke-room</sub></td>
+<td><img src="docs/img/mandala-trip.png" width="200"><br><sub>mandala-trip</sub></td>
 </tr>
 <tr>
-<td><img src="docs/img/spiral-waves.png" width="220"><br><sub>spiral-waves</sub></td>
-<td><img src="docs/img/reaction-bloom.png" width="220"><br><sub>reaction-bloom</sub></td>
-<td><img src="docs/img/glitch-city.png" width="220"><br><sub>glitch-city</sub></td>
-<td><img src="docs/img/mandelzoom.png" width="220"><br><sub>mandelzoom</sub></td>
+<td><img src="docs/img/spiral-waves.png" width="200"><br><sub>spiral-waves</sub></td>
+<td><img src="docs/img/wireframe.png" width="200"><br><sub>wireframe</sub></td>
+<td><img src="docs/img/glitch-city.png" width="200"><br><sub>glitch-city</sub></td>
+<td><img src="docs/img/vectorscope.png" width="200"><br><sub>vectorscope</sub></td>
 </tr>
 <tr>
-<td><img src="docs/img/neon-grid.png" width="220"><br><sub>neon-grid</sub></td>
-<td><img src="docs/img/plasma-bloom.png" width="220"><br><sub>plasma-bloom</sub></td>
-<td><img src="docs/img/vhs-dream.png" width="220"><br><sub>vhs-dream</sub></td>
-<td><img src="docs/img/init.png" width="220"><br><sub>init</sub></td>
-</tr>
-<tr>
-<td><img src="docs/img/wireframe.png" width="220"><br><sub>wireframe</sub></td>
-<td><img src="docs/img/vectorscope.png" width="220"><br><sub>vectorscope</sub></td>
-<td><img src="docs/img/oscillo.png" width="220"><br><sub>oscillo</sub></td>
-<td></td>
+<td><img src="docs/img/neon-grid.png" width="200"><br><sub>neon-grid</sub></td>
+<td><img src="docs/img/reaction-bloom.png" width="200"><br><sub>reaction-bloom</sub></td>
+<td><img src="docs/img/plasma-bloom.png" width="200"><br><sub>plasma-bloom</sub></td>
+<td><img src="docs/img/vhs-dream.png" width="200"><br><sub>vhs-dream</sub></td>
 </tr>
 </table>
 
-*All frames are generated live; these are the bundled presets, captured at a
-random moment with no audio input.*
+*Sixteen builtin presets ship in the binary; the last-used one auto-loads on
+launch. All frames here are generated live (no audio input).*
 
-## What's in it
+## Generators
 
-- **36 generators** — sine plasma, tunnels, flow fields, kaleidoscope,
-  metaballs, voronoi, moire, audio rings, starfield, warp grids, Lissajous
-  scope, spectrum bars, colour bars, rotozoom, fire, copper bars, twister,
-  Mandelbrot, Julia, raymarched torus, Truchet, hex grid, spirals,
-  phyllotaxis, interference, cylinder, Sierpinski, perspective floor, mandala,
-  lightning, clouds, wormhole, bobs — plus stateful simulations:
-  **reaction-diffusion** (Gray-Scott), **spiral waves** (Greenberg-Hastings
-  excitable medium) and **curl-noise smoke**.
-- **3-layer compositor** — each layer runs any generator with its own knobs,
-  per-layer transform (zoom / rotate / pan), blend mode and opacity.
-- **Effect chain** — video **feedback** (infinite-zoom trails), **mirror /
-  kaleidoscope**, **hue-cycle**, **lo-fi** (pixelate + posterize), analog
-  **VHS** (aberration / chroma bleed / scanlines / tape noise / tracking /
-  vignette), **glitch / datamosh** (slice displacement, RGB desync, block
-  compression, dropouts, bitcrush) and **bloom**.
-- **Modulation matrix** — a grid patchbay routing audio bands, the onset, the
-  beat-clock phase and **six tempo-synced LFOs** (nine waveforms each) onto any
-  parameter, with per-route depth and smoothing.
-- **Lettering bank** — eight MIDI-triggerable text slots, multiple baked pixel
-  fonts (system / bold / outline / alien) and text FX (dissolve / wave / tear /
-  scanlines).
-- **Presets** — curated builtins embedded in the binary, save/recall in the
-  browser, autoloads the last one on launch.
-- **Beat clock** — free-running tempo that locks to incoming MIDI clock.
+38 of them — procedural fields, demoscene classics, fractals, a stereo scope, a
+morphing wireframe solid, and three living simulations (reaction-diffusion,
+spiral-wave excitable medium, curl-noise smoke). Each layer can run any of them.
+
+![generators](docs/img/generators.png)
+
+## Effect chain
+
+Composited layers run through a chain of toggleable, modulatable effects:
+**feedback** (infinite-zoom trails), **mirror / kaleidoscope**, **hue-cycle**,
+**lo-fi** (pixelate + posterize), analog **VHS**, **glitch / datamosh** and
+**bloom**.
+
+![effects](docs/img/fx.png)
+
+## Everything is modulated
+
+A **grid patchbay** routes signal sources onto any parameter, with per-route
+depth and smoothing:
+
+- **audio** — low / mid / high bands, RMS, onset, all auto-gained;
+- **beat clock** — phase, locked to incoming MIDI clock or free-running;
+- **six LFOs** — nine waveforms (sine, triangle, saw up/down, square, pulse,
+  sample-&-hold, smooth-noise, steps), tempo-synced to musical divisions.
+
+Per-layer **transforms** (zoom / rotate / pan) and a **lettering bank** — eight
+MIDI-note-gated text slots (show on note-on, hide on note-off), seven baked
+pixel fonts and text FX (dissolve / wave / tear / scanlines) — round it out.
 
 ## Control
 
-- **Web UI** — served by the binary at `http://<host>:8080`; a live control
-  surface with master + blackout, per-layer decks, the effects rack, the
-  modulation grid, LFO scopes and the preset/lettering panels. Two-way synced
-  over a websocket (protobuf), so MIDI/OSC moves show up there too.
-- **MIDI** — notes, CC and clock; opens a **virtual port** ("audiovis") so a
-  DAW or sequencer can drive it, and auto-connects hardware ports. Per-control
-  **learn**.
-- **OSC** — over UDP; `/p/<param.path> <value>` sets any parameter directly,
-  any other address is learnable.
+- **Web UI** at `http://<host>:8080` — a live surface (master + blackout, per-
+  layer decks, effects rack, modulation grid, LFO scopes, preset & lettering
+  panels, MIDI map), two-way synced over a protobuf websocket.
+- **MIDI** — notes / CC / clock; opens a virtual port ("audiovis") and
+  auto-connects hardware; per-control **learn**.
+- **OSC** — `/p/<param.path> <value>` sets anything; other addresses are
+  learnable.
 
-## Build
+## Build & run
 
 ```sh
-cargo build --release
+cargo build --release        # self-contained binary (web UI + assets embedded)
+./target/release/audiovis    # windowed, web UI on :8080
+
+# headless on a Pi / C.H.I.P., straight to the framebuffer:
+audiovis --backend drm --width 1280 --height 720 --render-scale 0.5 --fps 30
 ```
 
-The optional camera / video input layer is behind a feature flag:
+`audiovis --help` lists every option; each has an `AV_*` environment equivalent.
 
-```sh
-cargo build --release --features camera
-```
+## How it works
 
-The release binary embeds the web UI and all assets — it is self-contained.
-
-## Run
-
-```sh
-audiovis                       # windowed, web UI on :8080
-audiovis --backend drm \       # headless on a Pi/C.H.I.P, straight to framebuffer
-  --width 1280 --height 720 --render-scale 0.5 --fps 30
-```
-
-`audiovis --help` lists every option; each also has an `AV_*` environment
-equivalent.
+Raw OpenGL ES 2.0 via `glow` (so it runs on VideoCore IV / Mali-400 as well as
+desktop GL); generators and effects are full-screen fragment shaders written to
+the GLES2 / desktop-GL common subset. Audio is captured with `cpal` and analysed
+through a mel filterbank; control is `midir` + `rosc`; the web server is `axum`
+serving an embedded UI that speaks protobuf (`prost`) over a websocket.
 
 ## License
 
