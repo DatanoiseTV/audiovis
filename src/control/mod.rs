@@ -66,6 +66,8 @@ pub enum ControlEvent {
     SetAudioDevice(String),
     /// Switch the MIDI hardware input filter (empty connects to all ports).
     SetMidiPort(String),
+    /// Re-scan the media directory for newly added image/SVG files.
+    RescanMedia,
 }
 
 /// Owns the channel endpoints. Sources clone the [`Sender`]; the engine holds

@@ -22,6 +22,11 @@ const NUM_BLENDS: i64 = 5;
 /// Longest side an SVG is rasterised to; keeps memory sane on weak ARM.
 const SVG_MAX_SIDE: f32 = 1024.0;
 
+/// Upper bound on selectable media files. The source param is registered with
+/// this max so files dropped in and picked up by a rescan stay selectable
+/// without re-registering the parameter.
+const MAX_MEDIA_FILES: i64 = 63;
+
 /// Control handles for one media layer, resolved once at construction.
 struct MediaLayer {
     source: ParamId,
@@ -63,7 +68,7 @@ impl MediaBank {
         let mut layers = Vec::with_capacity(NUM_MEDIA);
         {
             let store = engine.params_mut();
-            let src_max = (names.len() as i64 - 1).max(0);
+            let src_max = MAX_MEDIA_FILES;
             for i in 0..NUM_MEDIA {
                 let g = format!("Media {}", i + 1);
                 let pre = format!("media.{i}");
@@ -110,6 +115,16 @@ impl MediaBank {
     /// Dropdown labels for the media source param (index 0 = none).
     pub fn names(&self) -> &[String] {
         &self.names
+    }
+
+    /// Re-scan the media directory (after the user drops in new files). Loaded
+    /// layers keep their current texture; `last_src` is reset so a re-selection
+    /// reloads against the new file list.
+    pub fn rescan(&mut self) {
+        let (files, names) = scan_media_dir();
+        self.files = files;
+        self.names = names;
+        self.last_src = vec![-1; NUM_MEDIA];
     }
 
     /// Blend each enabled media layer over the accumulator, loading any newly

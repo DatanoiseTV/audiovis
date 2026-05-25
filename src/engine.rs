@@ -246,9 +246,9 @@ impl Engine {
                     tracing::warn!("preset save failed: {e:#}");
                 }
             }
-            // I/O device selection is owned by the window backend, which
-            // intercepts these before they reach the engine.
-            ControlEvent::SetAudioDevice(_) | ControlEvent::SetMidiPort(_) => {}
+            // I/O device selection and media rescan are owned by the window
+            // backend, which intercepts these before they reach the engine.
+            ControlEvent::SetAudioDevice(_) | ControlEvent::SetMidiPort(_) | ControlEvent::RescanMedia => {}
         }
     }
 

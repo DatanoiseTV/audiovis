@@ -270,4 +270,9 @@ impl Compositor {
     pub fn media_names(&self) -> Vec<String> {
         self.media.names().to_vec()
     }
+
+    /// Re-scan the media directory (picks up newly added files).
+    pub fn rescan_media(&mut self) {
+        self.media.rescan();
+    }
 }

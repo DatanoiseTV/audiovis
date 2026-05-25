@@ -261,6 +261,16 @@ impl WindowApp {
                     self.midi.set_port(&name);
                     self.publish_devices();
                 }
+                ControlEvent::RescanMedia => {
+                    if let Some(gfx) = self.gfx.as_mut() {
+                        gfx.pipeline.rescan_media();
+                        let names = gfx.pipeline.media_names();
+                        tracing::info!("rescanned media: {} file(s)", names.len().saturating_sub(1));
+                        if let Some(web) = &self.web {
+                            web.publish_media(names);
+                        }
+                    }
+                }
                 other => self.engine.handle(other),
             }
         }

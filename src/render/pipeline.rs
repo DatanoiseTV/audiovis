@@ -107,6 +107,11 @@ impl Pipeline {
         self.compositor.media_names()
     }
 
+    /// Re-scan the media directory (picks up newly added files).
+    pub fn rescan_media(&mut self) {
+        self.compositor.rescan_media();
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) {
         self.out_w = width.max(1);
         self.out_h = height.max(1);

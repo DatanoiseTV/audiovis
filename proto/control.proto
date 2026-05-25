@@ -143,4 +143,6 @@ message ClientMsg {
   TextCmd text = 4;
   ModRouteCmd mod = 5;
   DeviceCmd device = 6;
+  // Re-scan the media directory for newly added files.
+  bool rescan_media = 7;
 }

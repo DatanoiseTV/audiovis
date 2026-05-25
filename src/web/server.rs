@@ -32,6 +32,7 @@ pub fn run(addr: String, state: AppState) {
         let app = Router::new()
             .route("/ws", get(ws_upgrade))
             .route("/control.proto", get(proto_file))
+            .route("/media/{name}", get(media_file))
             .fallback(get(static_handler))
             .with_state(state);
 
@@ -50,6 +51,31 @@ pub fn run(addr: String, state: AppState) {
 /// Serve `proto/control.proto` so the browser can parse the schema at runtime.
 async fn proto_file() -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "text/plain")], include_str!("../../proto/control.proto"))
+}
+
+/// Serve a file from the media directory so the web UI can show thumbnails.
+/// Only a bare file name is accepted (no path separators), keeping this away
+/// from the rest of the filesystem.
+async fn media_file(axum::extract::Path(name): axum::extract::Path<String>) -> Response {
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return (StatusCode::BAD_REQUEST, "bad name").into_response();
+    }
+    let dir = std::env::var("AV_MEDIA_DIR").unwrap_or_else(|_| "media".to_string());
+    let path = std::path::Path::new(&dir).join(&name);
+    let mime = match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        _ => "application/octet-stream",
+    };
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => (
+            [(header::CONTENT_TYPE, mime.to_string()), (header::CACHE_CONTROL, "max-age=60".to_string())],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "not found").into_response(),
+    }
 }
 
 /// Serve an embedded asset, defaulting `/` to index.html.

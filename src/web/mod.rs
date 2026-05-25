@@ -171,6 +171,15 @@ impl WebHandle {
         let _ = self.out.send(msg.encode_to_vec());
     }
 
+    /// Publish the media file labels (after a rescan picks up new files).
+    pub fn publish_media(&self, media: Vec<String>) {
+        if let Ok(mut s) = self.snapshot.write() {
+            s.media = media.clone();
+        }
+        let msg = proto::ServerMsg { media, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
     /// Publish a JPEG preview frame for the web monitor (transient, not stored).
     pub fn publish_preview(&self, jpeg: Vec<u8>) {
         let msg = proto::ServerMsg { preview: jpeg, ..Default::default() };
@@ -294,6 +303,9 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
             "midi" => out.push(ControlEvent::SetMidiPort(d.name)),
             _ => {}
         }
+    }
+    if msg.rescan_media {
+        out.push(ControlEvent::RescanMedia);
     }
     out
 }

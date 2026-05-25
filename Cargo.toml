@@ -47,7 +47,7 @@ midir = "0.10"
 rosc = "0.10"
 
 # Web control surface: axum server, websockets, protobuf, embedded assets.
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time", "fs"] }
 axum = { version = "0.8", features = ["ws"] }
 futures-util = "0.3"
 prost = "0.13"
