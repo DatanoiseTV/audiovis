@@ -308,3 +308,84 @@ main {
   column-span: all;
   -webkit-column-span: all;
 }
+
+/* ============================================================
+   OUTPUT MONITOR - sticky live preview, always visible (top-right),
+   like a hardware program-out monitor.
+   ============================================================ */
+.monitor {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 50;
+  width: 300px;
+  min-width: 180px;
+  max-width: 900px;
+  margin: 0;
+  padding: 8px 9px 14px;
+  background: rgba(10, 10, 16, 0.9);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line2);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6);
+}
+.monitor h2 { font-size: 12px; margin: 0 0 7px; padding-bottom: 6px; cursor: move; touch-action: none; }
+.monitor h2::before { content: none; } /* the header is a drag handle, not a fold caret */
+/* bottom-right resize grip */
+.monitor .reszh {
+  position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px;
+  cursor: nwse-resize; touch-action: none; opacity: 0.5;
+  background:
+    linear-gradient(135deg, transparent 0 45%, var(--text-dim) 45% 55%, transparent 55% 70%, var(--text-dim) 70% 80%, transparent 80%);
+}
+.monitor .reszh:hover { opacity: 1; }
+.monitor.collapsed .reszh { display: none; }
+.monitor h2 .live {
+  width: 7px; height: 7px; border-radius: 50%; margin-left: auto;
+  background: #2a2a3a; transition: background 0.2s, box-shadow 0.2s;
+}
+.monitor.lit h2 .live { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.monitor .screen {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: repeating-linear-gradient(45deg, #0a0a12 0 8px, #0c0c16 8px 16px);
+  border: 1px solid rgba(53, 224, 216, 0.4);
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 0 22px rgba(53, 224, 216, 0.12) inset;
+}
+.monitor .screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+/* reserve room on the right so the rightmost column never hides under the
+   floating monitor; on narrow screens the monitor docks back into the flow. */
+/* Reserve room on the right for the monitor's default position; once it is
+   dragged or resized the operator owns the placement. */
+@media (min-width: 1180px) {
+  main { padding-right: 336px; }
+}
+
+/* ============================================================
+   COMPACT PASS - denser, calmer instrument layout. Last word in the
+   cascade so it tightens the earlier theme without fighting it.
+   ============================================================ */
+body { font-size: 12px; }
+main { column-width: 300px; column-gap: 14px; padding: 14px; }
+.group { padding: 10px 12px; margin: 0 0 14px; border-radius: 6px; }
+h2 { font-size: 13px; margin: 0 0 9px; padding-bottom: 6px; letter-spacing: 1.5px; }
+.group h2::before { font-size: 10px; }
+.row { margin: 5px 0; gap: 9px; grid-template-columns: 86px 1fr auto; }
+.row .val { min-width: 42px; }
+.btn { padding: 4px 8px; font-size: 12px; }
+.learn { font-size: 10px; padding: 3px 6px; }
+select, input[type=text] { padding: 4px 6px; font-size: 12px; }
+.cell { height: 30px; }
+
+/* I/O panel: same accent family as Audio, sits with the global controls. */
+.group.io { border-color: rgba(255, 179, 71, 0.3); }
+.group.io h2 { color: var(--amber); }

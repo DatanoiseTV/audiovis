@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-19";
+const UI_BUILD = "ui-23";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -20,6 +20,7 @@ const TEXTFX_NAMES = ["none", "dissolve", "wave", "tear", "scanlines"];
 // Named option lists for integer params that read better as dropdowns.
 function intOptions(path) {
   if (path.endsWith(".generator")) return generators;
+  if (path.endsWith(".source")) return mediaFiles;
   if (path.endsWith(".blend")) return BLEND_NAMES;
   if (path.endsWith(".div")) return DIV_NAMES;
   if (path.endsWith(".shape")) return SHAPE_NAMES;
@@ -35,7 +36,9 @@ const widgets = new Map(); // path -> { set(value, norm), spec }
 const specsByPath = new Map();
 const paramValues = new Map(); // path -> { value, norm }, latest known
 let generators = [];
+let mediaFiles = ["(none)"];
 let modSources = [];
+let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
@@ -131,6 +134,7 @@ function connect() {
       const msg = ServerMsg.decode(new Uint8Array(ev.data));
       if (msg.schema && msg.schema.length) {
         generators = msg.generators || [];
+        if (msg.media && msg.media.length) mediaFiles = msg.media;
         if (msg.mod_sources && msg.mod_sources.length) modSources = msg.mod_sources;
         buildUI(msg.schema);
       }
@@ -142,6 +146,14 @@ function connect() {
       else if (msg.current_preset) renderPresets();
       if (msg.text && msg.text.length) { for (const t of msg.text) textSlots[t.id] = t.text; refreshTextInputs(); }
       if (msg.mappings_present) { mappingList = msg.mappings || []; renderMappings(); }
+      if (msg.devices_present) {
+        audioDevices = msg.audio_devices || [];
+        audioDevice = msg.audio_device || "";
+        midiPorts = msg.midi_ports || [];
+        midiPort = msg.midi_port || "";
+        renderDevices();
+      }
+      if (msg.preview && msg.preview.length) updatePreview(msg.preview);
     } catch (e) {
       console.error("decode error", e);
     }
@@ -168,6 +180,7 @@ const sendLearn = (path, arm, clear) => send({ learn: { path, arm, clear } });
 const sendPreset = (action, path) => send({ preset: { action, path } });
 const sendText = (id, text) => send({ text: { id, text } });
 const sendRelease = (path) => send({ set: { path, release: true } });
+const sendDevice = (kind, name) => send({ device: { kind, name } });
 
 // --- UI building ---
 
@@ -177,9 +190,10 @@ const FX_GROUPS = ["Feedback", "Mirror", "Hue cycle", "Lo-fi", "VHS", "Glitch", 
 // LFOs / clock / global.
 function groupOrder(name) {
   if (name.startsWith("Layer")) return 0 + (parseInt(name.replace(/\D/g, ""), 10) || 0);
+  if (name.startsWith("Media")) return 5 + (parseInt(name.replace(/\D/g, ""), 10) || 0);
   const fx = FX_GROUPS.indexOf(name);
   if (fx >= 0) return 10 + fx;
-  return { LFO: 30, Clock: 31, Global: 32 }[name] ?? 40;
+  return { Audio: 28, LFO: 30, Clock: 31, Global: 32, Text: 33 }[name] ?? 40;
 }
 
 function buildUI(schema) {
@@ -194,10 +208,11 @@ function buildUI(schema) {
     groups.get(s.group).push(s);
   }
 
+  main.appendChild(buildMonitor()); // live output monitor up top, Resolume-style
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
-    const cls = name.startsWith("Layer") ? "group layer" : FX_GROUPS.includes(name) ? "group fx" : "group";
+    const cls = name.startsWith("Layer") || name.startsWith("Media") ? "group layer" : FX_GROUPS.includes(name) ? "group fx" : "group";
     const sec = el("div", cls);
     const h = el("h2", null, name);
     h.onclick = () => sec.classList.toggle("collapsed"); // click a header to fold it
@@ -206,6 +221,7 @@ function buildUI(schema) {
     if (name === "LFO") sec.appendChild(buildLfoScopes());
     main.appendChild(sec);
   }
+  main.appendChild(buildDevices());
   main.appendChild(buildMappings());
   main.appendChild(buildMatrix());
   main.appendChild(buildPresets());
@@ -558,6 +574,138 @@ function buildLettering(specs) {
     sec.appendChild(buildRow(spec));
   }
   return sec;
+}
+
+// --- live output monitor ---
+
+let _previewUrl = null;
+
+// Build the output monitor card: a 16:9 frame showing the live render, fed by
+// JPEG frames the engine streams over the websocket at ~10 fps.
+function buildMonitor() {
+  const sec = el("div", "group monitor");
+  const h = el("h2", null, "Output");
+  h.appendChild(el("span", "live", "")); // pulses when frames arrive
+  sec.appendChild(h);
+  const frame = el("div", "screen");
+  const img = el("img");
+  img.id = "preview";
+  img.alt = "live output";
+  frame.appendChild(img);
+  sec.appendChild(frame);
+  const grip = el("div", "reszh"); // bottom-right resize handle
+  sec.appendChild(grip);
+  makeMonitorInteractive(sec, h, grip);
+  return sec;
+}
+
+// Drag the monitor by its header and resize it from the corner grip; a header
+// click that doesn't move folds it. Position/size persist across reloads.
+function makeMonitorInteractive(sec, header, grip) {
+  const saved = (() => { try { return JSON.parse(localStorage.getItem("av.monitor") || "{}"); } catch { return {}; } })();
+  if (saved.w) sec.style.width = saved.w + "px";
+  if (saved.left != null) { sec.style.left = saved.left + "px"; sec.style.top = saved.top + "px"; sec.style.right = "auto"; }
+  if (saved.collapsed) sec.classList.add("collapsed");
+  const store = () => {
+    const r = sec.getBoundingClientRect();
+    const usingLeft = sec.style.right === "auto";
+    localStorage.setItem("av.monitor", JSON.stringify({
+      w: Math.round(r.width),
+      left: usingLeft ? Math.round(r.left) : null,
+      top: usingLeft ? Math.round(r.top) : null,
+      collapsed: sec.classList.contains("collapsed"),
+    }));
+  };
+
+  // --- drag from the header ---
+  header.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const r = sec.getBoundingClientRect();
+    const ox = e.clientX - r.left, oy = e.clientY - r.top;
+    let moved = false;
+    header.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) > 3) moved = true;
+      const x = Math.max(0, Math.min(window.innerWidth - 40, ev.clientX - ox));
+      const y = Math.max(0, Math.min(window.innerHeight - 30, ev.clientY - oy));
+      sec.style.left = x + "px"; sec.style.top = y + "px"; sec.style.right = "auto";
+    };
+    const up = () => {
+      header.removeEventListener("pointermove", move);
+      header.removeEventListener("pointerup", up);
+      if (!moved) sec.classList.toggle("collapsed"); // a plain click folds it
+      store();
+    };
+    header.addEventListener("pointermove", move);
+    header.addEventListener("pointerup", up);
+  });
+
+  // --- resize from the corner grip ---
+  grip.addEventListener("pointerdown", (e) => {
+    e.stopPropagation(); e.preventDefault();
+    const startW = sec.getBoundingClientRect().width, sx = e.clientX;
+    grip.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      sec.style.width = Math.max(180, Math.min(900, startW + (ev.clientX - sx))) + "px";
+    };
+    const up = () => { grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); store(); };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+  });
+}
+
+// Swap the monitor image to the newest frame, releasing the previous blob URL
+// once the new one has loaded so we don't leak object URLs over a long set.
+function updatePreview(bytes) {
+  const img = document.getElementById("preview");
+  if (!img) return;
+  const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+  img.onload = () => {
+    if (_previewUrl) URL.revokeObjectURL(_previewUrl);
+    _previewUrl = url;
+  };
+  img.src = url;
+  const mon = img.closest(".monitor");
+  if (mon) { mon.classList.add("lit"); clearTimeout(mon._lt); mon._lt = setTimeout(() => mon.classList.remove("lit"), 250); }
+}
+
+// --- audio / MIDI input device selection ---
+
+let devicesEl = null;
+
+// Build the I/O panel: dropdowns to pick the live audio input and MIDI input.
+// The audio analyzer knobs (gain/attack/release/sensitivity) render in their
+// own "Audio" param group next to it.
+function buildDevices() {
+  const sec = el("div", "group io");
+  sec.appendChild(el("h2", null, "Input / Output"));
+  devicesEl = el("div");
+  sec.appendChild(devicesEl);
+  renderDevices();
+  return sec;
+}
+
+function devicePicker(label, kind, options, current, defaultLabel) {
+  const row = el("div", "row");
+  row.appendChild(el("div", "name", label));
+  const sel = el("select");
+  const def = el("option", null, defaultLabel); def.value = ""; sel.appendChild(def);
+  for (const name of options) { const o = el("option", null, name); o.value = name; sel.appendChild(o); }
+  // Match the current selection: server sends a substring filter for MIDI, the
+  // device name for audio - select the option that contains/equals it.
+  sel.value = options.includes(current) ? current : "";
+  sel.onchange = () => sendDevice(kind, sel.value);
+  const mid = el("div"); mid.appendChild(sel);
+  row.appendChild(mid);
+  row.appendChild(el("div"));
+  return row;
+}
+
+function renderDevices() {
+  if (!devicesEl) return;
+  devicesEl.innerHTML = "";
+  devicesEl.appendChild(devicePicker("Audio in", "audio", audioDevices, audioDevice, "system default"));
+  devicesEl.appendChild(devicePicker("MIDI in", "midi", midiPorts, midiPort, "all ports"));
 }
 
 // --- MIDI / OSC mapping list ---

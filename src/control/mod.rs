@@ -60,6 +60,12 @@ pub enum ControlEvent {
     // --- Transport / presets ---
     LoadPreset(String),
     SavePreset(String),
+
+    // --- I/O device selection (handled by the window backend) ---
+    /// Switch the audio input device (empty selects the system default).
+    SetAudioDevice(String),
+    /// Switch the MIDI hardware input filter (empty connects to all ports).
+    SetMidiPort(String),
 }
 
 /// Owns the channel endpoints. Sources clone the [`Sender`]; the engine holds

@@ -96,7 +96,18 @@ impl PostChain {
     }
 
     /// Process `input` through the enabled effects and present to the screen.
-    pub fn process(&mut self, quad: &FullscreenQuad, input: glow::Texture, engine: &Engine, time: f32, out_w: i32, out_h: i32) {
+    /// If `preview` is given, the final frame is also drawn into it (for the
+    /// web monitor).
+    pub fn process(
+        &mut self,
+        quad: &FullscreenQuad,
+        input: glow::Texture,
+        engine: &Engine,
+        time: f32,
+        out_w: i32,
+        out_h: i32,
+        preview: Option<&RenderTexture>,
+    ) {
         let res = (self.width as f32, self.height as f32);
         let signals = self.signals;
         let mut current = input;
@@ -122,6 +133,20 @@ impl PostChain {
         self.present.set_texture("u_tex", 0, current);
         self.present.set_f32("u_brightness", brightness);
         quad.draw();
+
+        // Also draw the final frame into the small preview target for the web
+        // monitor (same present program, downscaled by the target size).
+        if let Some(pv) = preview {
+            pv.bind_as_target();
+            self.present.bind();
+            self.present.set_texture("u_tex", 0, current);
+            self.present.set_f32("u_brightness", brightness);
+            quad.draw();
+            // Re-bind the window framebuffer so later passes (the lettering
+            // overlay, the screenshot read-back) target the screen and not the
+            // tiny preview buffer.
+            gl::bind_screen(&self.gl, out_w, out_h);
+        }
     }
 }
 

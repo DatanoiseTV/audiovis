@@ -73,6 +73,18 @@ message ServerMsg {
   // "now empty").
   repeated MidiMap mappings = 11;
   bool mappings_present = 12;
+  // JPEG bytes of a downscaled live output frame (sent on its own at ~10 fps).
+  bytes preview = 13;
+  // Media file labels for the media-layer source dropdowns (index 0 = none).
+  repeated string media = 14;
+  // I/O devices: available audio inputs + the selected one, available MIDI
+  // hardware ports + the active filter. `devices_present` distinguishes "no
+  // device info in this message" from a genuinely empty list.
+  repeated string audio_devices = 15;
+  string audio_device = 16;
+  repeated string midi_ports = 17;
+  string midi_port = 18;
+  bool devices_present = 19;
 }
 
 // --- Client -> server ---
@@ -117,10 +129,18 @@ message ModRouteCmd {
   float smooth = 4;
 }
 
+// Select an input device. `kind` is "audio" or "midi"; an empty `name` means
+// the system default (audio) / all hardware ports (midi).
+message DeviceCmd {
+  string kind = 1;
+  string name = 2;
+}
+
 message ClientMsg {
   SetParam set = 1;
   LearnCmd learn = 2;
   PresetCmd preset = 3;
   TextCmd text = 4;
   ModRouteCmd mod = 5;
+  DeviceCmd device = 6;
 }

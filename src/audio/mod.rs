@@ -57,6 +57,12 @@ pub struct AudioShared {
     active: AtomicBool,
     /// Recent stereo waveform, interleaved L,R (length WAVE*2).
     waveform: Mutex<Vec<f32>>,
+    /// Live analyzer controls the analysis thread reads each pass, so the web UI
+    /// can tune the response without restarting capture.
+    gain: AtomicF32,
+    attack: AtomicF32,
+    release: AtomicF32,
+    onset: AtomicF32,
 }
 
 impl AudioShared {
@@ -81,6 +87,16 @@ impl AudioShared {
             out.extend_from_slice(&w);
         }
     }
+
+    /// Update the live analyzer controls (called by the render thread from the
+    /// `audio.*` parameters). `attack`/`release` are envelope coefficients in
+    /// 0..1; `onset` is the flux-over-average multiplier for beat detection.
+    pub fn set_controls(&self, gain: f32, attack: f32, release: f32, onset: f32) {
+        self.gain.store(gain);
+        self.attack.store(attack);
+        self.release.store(release);
+        self.onset.store(onset);
+    }
 }
 
 /// Owns the capture stream and analysis thread. Drop it to stop cleanly.
@@ -91,6 +107,8 @@ pub struct AudioEngine {
     // stream is not `Send` on every backend, hence kept on the creating thread.
     _stream: Option<cpal::Stream>,
     analysis: Option<JoinHandle<()>>,
+    /// Name of the device currently captured (empty = system default).
+    device: String,
 }
 
 impl AudioEngine {
@@ -98,27 +116,73 @@ impl AudioEngine {
     /// `gain` scales raw band energy before the saturating 0..1 mapping.
     pub fn start(device_name: &str, gain: f32) -> Self {
         let shared = Arc::new(AudioShared::default());
+        // Seed the live controls; the render thread overwrites these from the
+        // `audio.*` parameters once it is up.
+        shared.set_controls(gain, 0.99, 0.5, 1.6);
         let stop = Arc::new(AtomicBool::new(false));
 
-        match Self::try_start(device_name, gain, &shared, &stop) {
-            Ok((stream, handle)) => {
-                shared.active.store(true, Ordering::Relaxed);
-                AudioEngine { shared, stop, _stream: Some(stream), analysis: Some(handle) }
-            }
-            Err(e) => {
-                tracing::warn!("audio capture unavailable ({e:#}); running without audio reactivity");
-                AudioEngine { shared, stop, _stream: None, analysis: None }
-            }
-        }
+        let mut engine =
+            AudioEngine { shared, stop, _stream: None, analysis: None, device: device_name.to_string() };
+        engine.open(device_name);
+        engine
     }
 
     pub fn shared(&self) -> Arc<AudioShared> {
         self.shared.clone()
     }
 
+    /// The device currently selected (empty string means system default).
+    pub fn current_device(&self) -> &str {
+        &self.device
+    }
+
+    /// List the names of available input devices (for the web UI dropdown).
+    pub fn list_devices() -> Vec<String> {
+        let host = cpal::default_host();
+        let mut names = Vec::new();
+        if let Ok(devices) = host.input_devices() {
+            for d in devices {
+                if let Ok(n) = d.name() {
+                    names.push(n);
+                }
+            }
+        }
+        names
+    }
+
+    /// Switch to a different input device at runtime, reusing the shared feature
+    /// block so the renderer's handle stays valid. Empty selects the default.
+    pub fn set_device(&mut self, device_name: &str) {
+        // Stop the current session first (drop stream, join thread).
+        self.stop.store(true, Ordering::Relaxed);
+        self._stream.take();
+        if let Some(h) = self.analysis.take() {
+            let _ = h.join();
+        }
+        self.shared.active.store(false, Ordering::Relaxed);
+        self.stop = Arc::new(AtomicBool::new(false));
+        self.device = device_name.to_string();
+        self.open(device_name);
+    }
+
+    /// Open a capture session into the existing shared block.
+    fn open(&mut self, device_name: &str) {
+        match Self::try_start(device_name, &self.shared, &self.stop) {
+            Ok((stream, handle)) => {
+                self.shared.active.store(true, Ordering::Relaxed);
+                self._stream = Some(stream);
+                self.analysis = Some(handle);
+            }
+            Err(e) => {
+                tracing::warn!("audio capture unavailable ({e:#}); running without audio reactivity");
+                self._stream = None;
+                self.analysis = None;
+            }
+        }
+    }
+
     fn try_start(
         device_name: &str,
-        gain: f32,
         shared: &Arc<AudioShared>,
         stop: &Arc<AtomicBool>,
     ) -> anyhow::Result<(cpal::Stream, JoinHandle<()>)> {
@@ -154,7 +218,7 @@ impl AudioEngine {
         };
         stream.play()?;
 
-        let handle = spawn_analysis(sample_rate, gain, ring, shared.clone(), stop.clone());
+        let handle = spawn_analysis(sample_rate, ring, shared.clone(), stop.clone());
         Ok((stream, handle))
     }
 }
@@ -237,7 +301,6 @@ impl ToMono for u16 {
 /// The analysis loop: take the most recent window, analyze, smooth, publish.
 fn spawn_analysis(
     sample_rate: f32,
-    gain: f32,
     ring: Arc<Mutex<VecDeque<f32>>>,
     shared: Arc<AudioShared>,
     stop: Arc<AtomicBool>,
@@ -282,28 +345,34 @@ fn spawn_analysis(
 
                 if have {
                     let f = analyzer.analyze(&block);
+                    // Live controls, tunable from the web UI each pass.
+                    let gain = shared.gain.load();
+                    let attack = shared.attack.load().clamp(0.01, 1.0);
+                    let release = shared.release.load().clamp(0.01, 1.0);
+                    let onset = shared.onset.load().max(1.0);
+                    let follow = |prev: f32, target: f32| exp_filter(prev, target, attack, release);
 
                     if f.rms < MIN_VOLUME {
                         // Treat as silence; let the envelopes decay to rest.
-                        env_low = exp_follow(env_low, 0.0);
-                        env_mid = exp_follow(env_mid, 0.0);
-                        env_high = exp_follow(env_high, 0.0);
-                        env_rms = exp_follow(env_rms, 0.0);
+                        env_low = follow(env_low, 0.0);
+                        env_mid = follow(env_mid, 0.0);
+                        env_high = follow(env_high, 0.0);
+                        env_rms = follow(env_rms, 0.0);
                     } else {
                         // Rolling auto-gain off the loudest current band.
                         let peak = f.low.max(f.mid).max(f.high);
                         mel_gain = exp_filter(mel_gain, peak, 0.99, 0.01).max(1e-4);
                         let normalize = |v: f32| (v / mel_gain * gain).clamp(0.0, 1.0);
 
-                        env_low = exp_follow(env_low, normalize(f.low));
-                        env_mid = exp_follow(env_mid, normalize(f.mid));
-                        env_high = exp_follow(env_high, normalize(f.high));
-                        env_rms = exp_follow(env_rms, (f.rms * 4.0 * gain).clamp(0.0, 1.0));
+                        env_low = follow(env_low, normalize(f.low));
+                        env_mid = follow(env_mid, normalize(f.mid));
+                        env_high = follow(env_high, normalize(f.high));
+                        env_rms = follow(env_rms, (f.rms * 4.0 * gain).clamp(0.0, 1.0));
                     }
 
                     // Onset: flux clearly above its slow running average.
                     flux_avg = flux_avg * 0.95 + f.flux * 0.05;
-                    if f.flux > flux_avg * 1.6 + 1e-4 {
+                    if f.flux > flux_avg * onset + 1e-4 {
                         beat = 1.0;
                     }
                     beat *= 0.85;
@@ -328,8 +397,3 @@ fn exp_filter(prev: f32, target: f32, alpha_rise: f32, alpha_decay: f32) -> f32 
     prev + a * (target - prev)
 }
 
-/// The band-envelope follower: snappy rise, gentle release, so peaks pop and
-/// then ease down (rise 0.99 / decay 0.5, matching the reference smoothing).
-fn exp_follow(prev: f32, target: f32) -> f32 {
-    exp_filter(prev, target, 0.99, 0.5)
-}

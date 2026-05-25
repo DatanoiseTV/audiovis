@@ -139,6 +139,13 @@ fn initial_state(state: &AppState) -> Vec<u8> {
         current_preset: s.current_preset.clone(),
         mappings: s.mappings.clone(),
         mappings_present: true,
+        preview: Vec::new(),
+        media: s.media.clone(),
+        audio_devices: s.audio_devices.clone(),
+        audio_device: s.audio_device.clone(),
+        midi_ports: s.midi_ports.clone(),
+        midi_port: s.midi_port.clone(),
+        devices_present: true,
     };
     msg.encode_to_vec()
 }

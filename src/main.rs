@@ -45,6 +45,8 @@ fn main() -> Result<()> {
     let bus = ControlBus::new();
     let mut engine = Engine::new();
     seed_demo_params(&mut engine);
+    // Honour the CLI gain as the starting value for the live audio.gain param.
+    engine.params_mut().set_path("audio.gain", params::ParamValue::Float(args.audio_gain));
 
     // Note: a startup preset is applied by the backend *after* the render
     // pipeline registers its parameters, otherwise the layer/effect paths it
@@ -80,6 +82,15 @@ fn seed_demo_params(engine: &mut Engine) {
         "Global",
         ParamKind::Float { min: 0.0, max: 4.0, default: 1.0 },
     ));
+
+    // Audio analyzer controls. The render thread copies these onto the analysis
+    // thread each frame, so they retune the response live (and are themselves
+    // modulation targets). Gain scales the band energy; attack/release set the
+    // envelope follower's rise/fall; sensitivity is the onset flux threshold.
+    p.register(ParamSpec::new("audio.gain", "Gain", "Audio", ParamKind::Float { min: 0.0, max: 8.0, default: 1.0 }));
+    p.register(ParamSpec::new("audio.attack", "Attack", "Audio", ParamKind::Float { min: 0.05, max: 1.0, default: 0.99 }));
+    p.register(ParamSpec::new("audio.release", "Release", "Audio", ParamKind::Float { min: 0.05, max: 1.0, default: 0.5 }));
+    p.register(ParamSpec::new("audio.sensitivity", "Beat sens", "Audio", ParamKind::Float { min: 1.0, max: 4.0, default: 1.6 }));
 
     // Beat-clock telemetry, written from incoming MIDI clock.
     p.register(ParamSpec::new(

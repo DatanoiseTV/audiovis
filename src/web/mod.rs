@@ -40,6 +40,11 @@ struct Snapshot {
     presets: Vec<String>,
     current_preset: String,
     mappings: Vec<proto::MidiMap>,
+    media: Vec<String>,
+    audio_devices: Vec<String>,
+    audio_device: String,
+    midi_ports: Vec<String>,
+    midi_port: String,
 }
 
 /// Shared between the server tasks and the publisher.
@@ -75,7 +80,7 @@ impl WebHandle {
 
     /// Publish the parameter schema and the generator names once, after the
     /// pipeline has registered everything. Also seeds the initial value set.
-    pub fn set_schema(&self, engine: &Engine, generators: Vec<String>) {
+    pub fn set_schema(&self, engine: &Engine, generators: Vec<String>, media: Vec<String>) {
         let mut schema = Vec::new();
         let mut values = HashMap::new();
         for (id, spec, value) in engine.params().iter() {
@@ -103,7 +108,7 @@ impl WebHandle {
                 },
             );
         }
-        let (schema_c, generators_c, changes_c);
+        let (schema_c, generators_c, changes_c, media_c);
         let mod_sources: Vec<String> = crate::params::MOD_SOURCES.iter().map(|s| s.to_string()).collect();
         let sources_c;
         if let Ok(mut s) = self.snapshot.write() {
@@ -111,10 +116,12 @@ impl WebHandle {
             s.generators = generators;
             s.values = values;
             s.mod_sources = mod_sources;
+            s.media = media;
             schema_c = s.schema.clone();
             generators_c = s.generators.clone();
             changes_c = s.values.values().cloned().collect();
             sources_c = s.mod_sources.clone();
+            media_c = s.media.clone();
         } else {
             return;
         }
@@ -125,6 +132,7 @@ impl WebHandle {
             generators: generators_c,
             changes: changes_c,
             mod_sources: sources_c,
+            media: media_c,
             ..Default::default()
         };
         let _ = self.out.send(msg.encode_to_vec());
@@ -141,6 +149,31 @@ impl WebHandle {
             s.text = text.clone();
         }
         let msg = proto::ServerMsg { text, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Publish the available + selected audio/MIDI input devices.
+    pub fn publish_devices(&self, audio_devices: Vec<String>, audio_device: &str, midi_ports: Vec<String>, midi_port: &str) {
+        if let Ok(mut s) = self.snapshot.write() {
+            s.audio_devices = audio_devices.clone();
+            s.audio_device = audio_device.to_string();
+            s.midi_ports = midi_ports.clone();
+            s.midi_port = midi_port.to_string();
+        }
+        let msg = proto::ServerMsg {
+            audio_devices,
+            audio_device: audio_device.to_string(),
+            midi_ports,
+            midi_port: midi_port.to_string(),
+            devices_present: true,
+            ..Default::default()
+        };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Publish a JPEG preview frame for the web monitor (transient, not stored).
+    pub fn publish_preview(&self, jpeg: Vec<u8>) {
+        let msg = proto::ServerMsg { preview: jpeg, ..Default::default() };
         let _ = self.out.send(msg.encode_to_vec());
     }
 
@@ -254,6 +287,13 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
     }
     if let Some(t) = msg.text {
         out.push(ControlEvent::SetText { slot: t.id as u32, text: t.text });
+    }
+    if let Some(d) = msg.device {
+        match d.kind.as_str() {
+            "audio" => out.push(ControlEvent::SetAudioDevice(d.name)),
+            "midi" => out.push(ControlEvent::SetMidiPort(d.name)),
+            _ => {}
+        }
     }
     out
 }

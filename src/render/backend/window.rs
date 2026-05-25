@@ -17,12 +17,13 @@ use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{Window, WindowId};
+use winit::window::{Fullscreen, Window, WindowId};
 
 use std::sync::Arc;
 
-use crate::audio::AudioShared;
+use crate::audio::{AudioEngine, AudioShared};
 use crate::cli::Cli;
+use crate::control::midi::MidiInputs;
 use crate::control::{ControlBus, ControlEvent};
 use crate::engine::Engine;
 use crate::presets::PresetStore;
@@ -33,9 +34,20 @@ use crate::render::{FrameContext, GlslFlavor};
 
 /// Run the desktop window backend. Blocks until the window is closed (or the
 /// frame budget set by `--frames`/`--screenshot` is reached).
-pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>, web: Option<WebHandle>) -> Result<()> {
+pub fn run(
+    cli: Cli,
+    engine: Engine,
+    bus: ControlBus,
+    audio: AudioEngine,
+    midi: MidiInputs,
+    web: Option<WebHandle>,
+) -> Result<()> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
+
+    // The renderer reads the shared feature block; the engine itself is held so
+    // the device can be switched live.
+    let audio_shared = audio.shared();
 
     let max_frames = if cli.frames > 0 {
         Some(cli.frames)
@@ -51,6 +63,8 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus, audio: Arc<AudioShared>, w
         engine,
         bus,
         audio,
+        audio_shared,
+        midi,
         web,
         presets: PresetStore::new(),
         current_preset: String::new(),
@@ -78,7 +92,12 @@ struct WindowApp {
     cli: Cli,
     engine: Engine,
     bus: ControlBus,
-    audio: Arc<AudioShared>,
+    /// Owns the capture stream so the input device can be switched live.
+    audio: AudioEngine,
+    /// Stable handle to the latest analysis result, survives a device switch.
+    audio_shared: Arc<AudioShared>,
+    /// Owns the MIDI connections so the hardware port can be switched live.
+    midi: MidiInputs,
     web: Option<WebHandle>,
     presets: PresetStore,
     current_preset: String,
@@ -164,16 +183,29 @@ impl WindowApp {
             // Generators and simulations share the layer.N.generator index space.
             let mut generators: Vec<String> = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
             generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
-            web.set_schema(&self.engine, generators);
+            web.set_schema(&self.engine, generators, pipeline.media_names());
             web.publish_presets(self.presets.list(), &self.current_preset);
             web.publish_text(self.engine.text_slots());
             web.publish_mappings(self.engine.mappings_list());
         }
+        self.publish_devices();
 
         tracing::info!("window backend up: {}x{} GL 3.3 Core via {}", w, h, renderer_name(&gl));
 
         self.gfx = Some(Gfx { window, surface, context, gl, pipeline });
         Ok(())
+    }
+
+    /// Publish the available + selected audio/MIDI input devices to the web UI.
+    fn publish_devices(&self) {
+        if let Some(web) = &self.web {
+            web.publish_devices(
+                AudioEngine::list_devices(),
+                self.audio.current_device(),
+                MidiInputs::list_ports(),
+                self.midi.current_filter(),
+            );
+        }
     }
 
     /// Load a preset by name (user file or builtin), remember it as the last,
@@ -219,6 +251,16 @@ impl WindowApp {
             match ev {
                 ControlEvent::LoadPreset(name) => self.load_preset_named(&name),
                 ControlEvent::SavePreset(name) => self.save_preset_named(&name),
+                ControlEvent::SetAudioDevice(name) => {
+                    tracing::info!("switching audio input to '{}'", if name.is_empty() { "default" } else { &name });
+                    self.audio.set_device(&name);
+                    self.publish_devices();
+                }
+                ControlEvent::SetMidiPort(name) => {
+                    tracing::info!("switching MIDI input to '{}'", if name.is_empty() { "all" } else { &name });
+                    self.midi.set_port(&name);
+                    self.publish_devices();
+                }
                 other => self.engine.handle(other),
             }
         }
@@ -231,11 +273,24 @@ impl WindowApp {
         // Advance the musical clock so tempo-synced LFOs and clock phases move.
         self.engine.tick_clock(dt);
 
+        // Push the live analyzer controls from the audio.* params, so tuning
+        // them in the UI retunes the response without restarting capture.
+        {
+            let p = self.engine.params();
+            let read = |path: &str, d: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(d);
+            self.audio_shared.set_controls(
+                read("audio.gain", 1.0),
+                read("audio.attack", 0.99),
+                read("audio.release", 0.5),
+                read("audio.sensitivity", 1.6),
+            );
+        }
+
         // Feed the latest audio energies to the generators.
-        let (low, mid, high) = self.audio.bands();
-        let beat = self.audio.beat();
-        self.audio.copy_waveform(&mut self.wave_buf);
-        let rms = self.audio.rms();
+        let (low, mid, high) = self.audio_shared.bands();
+        let beat = self.audio_shared.beat();
+        self.audio_shared.copy_waveform(&mut self.wave_buf);
+        let rms = self.audio_shared.rms();
 
         // Modulation pass: assemble the signal sources and route them onto
         // parameters before anything reads the params for rendering.
@@ -273,6 +328,21 @@ impl WindowApp {
 
         gfx.pipeline.render(&fc, &self.engine);
         self.engine.end_frame();
+
+        // Stream a downscaled live preview to the web monitor at ~10 fps.
+        if self.frame % 6 == 0 {
+            if let Some(web) = &self.web {
+                let rgba = gfx.pipeline.read_preview();
+                let mut jpeg = Vec::new();
+                let enc = jpeg_encoder::Encoder::new(&mut jpeg, 55);
+                if enc
+                    .encode(&rgba, crate::render::pipeline::PREVIEW_W as u16, crate::render::pipeline::PREVIEW_H as u16, jpeg_encoder::ColorType::Rgba)
+                    .is_ok()
+                {
+                    web.publish_preview(jpeg);
+                }
+            }
+        }
 
         // Capture before presenting so we read the freshly drawn back buffer.
         let last_frame = self.max_frames.map(|m| self.frame + 1 >= m).unwrap_or(false);
@@ -312,9 +382,23 @@ impl ApplicationHandler for WindowApp {
         match event {
             WindowEvent::CloseRequested => el.exit(),
             WindowEvent::KeyboardInput {
-                event: KeyEvent { logical_key: Key::Named(NamedKey::Escape), state: ElementState::Pressed, .. },
+                event: KeyEvent { logical_key, state: ElementState::Pressed, .. },
                 ..
-            } => el.exit(),
+            } => match logical_key {
+                Key::Named(NamedKey::Escape) => el.exit(),
+                // 'f' toggles borderless fullscreen on the monitor the window is
+                // currently on, so it can be dragged to an external display first.
+                Key::Character(s) if s.eq_ignore_ascii_case("f") => {
+                    if let Some(gfx) = self.gfx.as_ref() {
+                        let next = match gfx.window.fullscreen() {
+                            Some(_) => None,
+                            None => Some(Fullscreen::Borderless(None)),
+                        };
+                        gfx.window.set_fullscreen(next);
+                    }
+                }
+                _ => {}
+            },
             WindowEvent::Resized(size) => {
                 if let Some(gfx) = self.gfx.as_mut() {
                     if let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) {
