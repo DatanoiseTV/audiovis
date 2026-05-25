@@ -74,6 +74,10 @@ pub struct CommonUniforms {
     pub audio: (f32, f32, f32),
     /// Onset pulse, 0..1.
     pub beat: f32,
+    /// Per-layer transform: zoom (1 = none), rotation (radians), pan (x, y).
+    pub zoom: f32,
+    pub rot: f32,
+    pub pan: (f32, f32),
 }
 
 impl Default for CommonUniforms {
@@ -89,6 +93,9 @@ impl Default for CommonUniforms {
             p2: 0.5,
             audio: (0.0, 0.0, 0.0),
             beat: 0.0,
+            zoom: 1.0,
+            rot: 0.0,
+            pan: (0.0, 0.0),
         }
     }
 }
@@ -139,6 +146,9 @@ impl GeneratorBank {
         p.set_f32("u_p2", u.p2);
         p.set_vec3("u_audio", u.audio.0, u.audio.1, u.audio.2);
         p.set_f32("u_beat", u.beat);
+        p.set_f32("u_xzoom", u.zoom);
+        p.set_f32("u_xrot", u.rot);
+        p.set_vec2("u_xoff", u.pan.0, u.pan.1);
         quad.draw();
     }
 }
