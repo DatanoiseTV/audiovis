@@ -37,6 +37,8 @@ struct Snapshot {
     text: Vec<proto::TextSlot>,
     mod_sources: Vec<String>,
     mod_routes: Vec<proto::ModRoute>,
+    presets: Vec<String>,
+    current_preset: String,
 }
 
 /// Shared between the server tasks and the publisher.
@@ -124,6 +126,16 @@ impl WebHandle {
             mod_sources: sources_c,
             ..Default::default()
         };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Publish the preset list and the currently-loaded preset name.
+    pub fn publish_presets(&self, names: Vec<String>, current: &str) {
+        if let Ok(mut s) = self.snapshot.write() {
+            s.presets = names.clone();
+            s.current_preset = current.to_string();
+        }
+        let msg = proto::ServerMsg { presets: names, current_preset: current.to_string(), ..Default::default() };
         let _ = self.out.send(msg.encode_to_vec());
     }
 

@@ -11,6 +11,7 @@ mod config;
 mod control;
 mod engine;
 mod params;
+mod presets;
 mod render;
 mod version;
 mod web;
