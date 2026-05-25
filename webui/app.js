@@ -8,12 +8,14 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-12";
+const UI_BUILD = "ui-13";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
 const DIV_NAMES = ["8 bars", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"];
-const SHAPE_NAMES = ["sine", "triangle", "saw", "square", "s&h"];
+const SHAPE_NAMES = ["sine", "triangle", "saw up", "saw dn", "square", "pulse", "rand", "noise", "steps"];
+const FONT_NAMES = ["system", "bold", "outline", "alien"];
+const TEXTFX_NAMES = ["none", "dissolve", "wave", "tear", "scanlines"];
 
 // Named option lists for integer params that read better as dropdowns.
 function intOptions(path) {
@@ -21,6 +23,8 @@ function intOptions(path) {
   if (path.endsWith(".blend")) return BLEND_NAMES;
   if (path.endsWith(".div")) return DIV_NAMES;
   if (path.endsWith(".shape")) return SHAPE_NAMES;
+  if (path === "text.font") return FONT_NAMES;
+  if (path === "text.fx") return TEXTFX_NAMES;
   return null;
 }
 
@@ -36,6 +40,8 @@ let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
 let presetList = [];
 let currentPreset = "";
+const textSlots = [];
+const textInputs = new Map(); // slot -> input element
 
 // LFO division lengths in beats (must match Rust LFO_DIVISIONS).
 const DIV_BEATS = [32, 16, 8, 4, 2, 1, 0.5, 0.25];
@@ -132,6 +138,7 @@ function connect() {
       if (msg.current_preset) currentPreset = msg.current_preset;
       if (msg.presets && msg.presets.length) { presetList = msg.presets; renderPresets(); }
       else if (msg.current_preset) renderPresets();
+      if (msg.text && msg.text.length) { for (const t of msg.text) textSlots[t.id] = t.text; refreshTextInputs(); }
     } catch (e) {
       console.error("decode error", e);
     }
@@ -156,6 +163,7 @@ const sendRaw = (path, value) => send({ set: { path, is_norm: false, value } });
 const sendTrigger = (path) => send({ set: { path, trigger: true } });
 const sendLearn = (path, arm, clear) => send({ learn: { path, arm, clear } });
 const sendPreset = (action, path) => send({ preset: { action, path } });
+const sendText = (id, text) => send({ text: { id, text } });
 
 // --- UI building ---
 
@@ -184,6 +192,7 @@ function buildUI(schema) {
 
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
+    if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
     const cls = name.startsWith("Layer") ? "group layer" : FX_GROUPS.includes(name) ? "group fx" : "group";
     const sec = el("div", cls);
     sec.appendChild(el("h2", null, name));
@@ -496,6 +505,38 @@ function buildRow(spec) {
   widget.learnBtn = learn;
   widgets.set(spec.path, widget);
   return row;
+}
+
+// --- lettering bank panel ---
+
+function buildLettering(specs) {
+  const sec = el("div", "group");
+  sec.appendChild(el("h2", null, "Lettering"));
+  textInputs.clear();
+  for (let n = 0; n < 8; n++) {
+    const row = el("div", "textrow");
+    const inp = el("input"); inp.type = "text"; inp.placeholder = `slot ${n + 1}`; inp.value = textSlots[n] || "";
+    inp.oninput = () => sendText(n, inp.value);
+    const show = el("button", "btn", "show"); show.onclick = () => sendTrigger(`text.${n}.trigger`);
+    row.append(inp, show);
+    sec.appendChild(row);
+    textInputs.set(n, inp);
+  }
+  const clr = el("button", "btn", "clear"); clr.onclick = () => sendTrigger("text.clear");
+  sec.appendChild(clr);
+  // Style params (font / fx / size / pos / hue); the per-slot triggers are the
+  // "show" buttons above, so skip trigger kinds here.
+  for (const spec of specs) {
+    if (spec.kind === "trigger") continue;
+    sec.appendChild(buildRow(spec));
+  }
+  return sec;
+}
+
+function refreshTextInputs() {
+  for (const [n, inp] of textInputs) {
+    if (document.activeElement !== inp) inp.value = textSlots[n] || "";
+  }
 }
 
 let presetListEl = null;

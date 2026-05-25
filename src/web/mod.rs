@@ -129,6 +129,20 @@ impl WebHandle {
         let _ = self.out.send(msg.encode_to_vec());
     }
 
+    /// Publish the lettering slots so the UI's text fields populate.
+    pub fn publish_text(&self, slots: &[String]) {
+        let text: Vec<proto::TextSlot> =
+            slots.iter().enumerate().map(|(i, t)| proto::TextSlot { id: i as i32, text: t.clone() }).collect();
+        if let Ok(mut s) = self.snapshot.write() {
+            if s.text == text {
+                return;
+            }
+            s.text = text.clone();
+        }
+        let msg = proto::ServerMsg { text, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
     /// Publish the preset list and the currently-loaded preset name.
     pub fn publish_presets(&self, names: Vec<String>, current: &str) {
         if let Ok(mut s) = self.snapshot.write() {
@@ -221,6 +235,8 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
     if let Some(m) = msg.r#mod {
         out.push(ControlEvent::SetModRoute { source: m.source, target: m.target, amount: m.amount, smooth: m.smooth });
     }
-    // TextCmd is handled by the lettering bank milestone.
+    if let Some(t) = msg.text {
+        out.push(ControlEvent::SetText { slot: t.id as u32, text: t.text });
+    }
     out
 }

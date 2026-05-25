@@ -11,6 +11,7 @@ pub mod gl;
 pub mod pipeline;
 pub mod post;
 pub mod sim;
+pub mod text;
 
 pub use gl::GlslFlavor;
 

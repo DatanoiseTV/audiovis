@@ -30,6 +30,9 @@ pub struct Preset {
     /// Modulation routes (source -> param with amount).
     #[serde(default)]
     pub mod_routes: Vec<ModRoute>,
+    /// Lettering slots (saved sentences).
+    #[serde(default)]
+    pub text: Vec<String>,
 }
 
 fn preset_version() -> u32 {

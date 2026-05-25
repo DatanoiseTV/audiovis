@@ -10,6 +10,7 @@ use crate::engine::Engine;
 use super::compositor::Compositor;
 use super::gl::{FullscreenQuad, Gl, GlslFlavor};
 use super::post::PostChain;
+use super::text::TextOverlay;
 use super::FrameContext;
 
 /// Owns the GL resources for the render target and draws frames into it.
@@ -17,6 +18,7 @@ pub struct Pipeline {
     quad: FullscreenQuad,
     compositor: Compositor,
     post: PostChain,
+    text: TextOverlay,
     render_scale: f32,
     out_w: u32,
     out_h: u32,
@@ -36,7 +38,8 @@ impl Pipeline {
         let (iw, ih) = internal_size(width, height, scale);
         let compositor = Compositor::new(gl, flavor, engine, iw, ih)?;
         let post = PostChain::new(gl, flavor, engine, iw, ih)?;
-        Ok(Self { quad, compositor, post, render_scale: scale, out_w: width.max(1), out_h: height.max(1) })
+        let text = TextOverlay::new(gl, flavor)?;
+        Ok(Self { quad, compositor, post, text, render_scale: scale, out_w: width.max(1), out_h: height.max(1) })
     }
 
     /// Number of generators available, for the UI.
@@ -73,6 +76,8 @@ impl Pipeline {
             self.out_w as i32,
             self.out_h as i32,
         );
+        // Lettering goes on last, over the finished frame on the screen.
+        self.text.draw(&self.quad, engine, frame.time, self.out_w as i32, self.out_h as i32);
     }
 }
 

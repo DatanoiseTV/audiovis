@@ -51,6 +51,10 @@ pub enum ControlEvent {
     /// Add/update (amount != 0) or remove (amount == 0) a modulation route.
     SetModRoute { source: String, target: String, amount: f32, smooth: f32 },
 
+    // --- Lettering bank ---
+    /// Set the text of a lettering slot.
+    SetText { slot: u32, text: String },
+
     // --- Transport / presets ---
     LoadPreset(String),
     SavePreset(String),

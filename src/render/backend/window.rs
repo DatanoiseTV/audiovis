@@ -163,6 +163,7 @@ impl WindowApp {
             generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
             web.set_schema(&self.engine, generators);
             web.publish_presets(self.presets.list(), &self.current_preset);
+            web.publish_text(self.engine.text_slots());
         }
 
         tracing::info!("window backend up: {}x{} GL 3.3 Core via {}", w, h, renderer_name(&gl));
@@ -248,6 +249,7 @@ impl WindowApp {
                 let read = |path: &str, dflt: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(dflt);
                 web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0), read("clock.bar", 0.0), self.engine.musical_beats() as f32);
                 web.publish_mod_routes(&self.engine);
+                web.publish_text(self.engine.text_slots());
             }
         }
 

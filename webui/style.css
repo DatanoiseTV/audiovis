@@ -153,3 +153,7 @@ select, input[type=text] {
 .btn.preset.active { color: #000; background: var(--cyan); border-color: var(--cyan); }
 .preset-bar { display: flex; gap: 8px; align-items: center; }
 .preset-bar input { flex: 1; max-width: 260px; }
+
+/* --- lettering bank --- */
+.textrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 5px 0; }
+.textrow input { font-family: var(--mono); }
