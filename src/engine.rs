@@ -96,15 +96,23 @@ pub enum EngineNotice {
     Learned { mapping: Mapping },
     /// A trigger parameter fired this frame.
     Triggered { path: String },
+    /// A lettering slot's text changed (the UI should refresh its fields).
+    TextChanged,
 }
 
 /// The authoritative state container.
+/// Number of triggerable lettering slots.
+pub const TEXT_SLOTS: usize = 8;
+
 pub struct Engine {
     params: ParamStore,
     mappings: crate::params::MappingTable,
     modmatrix: ModMatrix,
     notices: Vec<EngineNotice>,
     clock: BeatClock,
+    /// Lettering bank: saved sentences and which one is currently shown.
+    text_slots: Vec<String>,
+    text_active: Option<usize>,
 }
 
 impl Default for Engine {
@@ -121,7 +129,23 @@ impl Engine {
             modmatrix: ModMatrix::new(),
             notices: Vec::new(),
             clock: BeatClock::new(),
+            text_slots: vec![String::new(); TEXT_SLOTS],
+            text_active: None,
         }
+    }
+
+    /// Currently-shown lettering slot, if any.
+    pub fn text_active(&self) -> Option<usize> {
+        self.text_active
+    }
+
+    /// The sentence stored in a slot.
+    pub fn text_slot(&self, i: usize) -> &str {
+        self.text_slots.get(i).map(String::as_str).unwrap_or("")
+    }
+
+    pub fn text_slots(&self) -> &[String] {
+        &self.text_slots
     }
 
     pub fn modmatrix(&self) -> &ModMatrix {
@@ -196,6 +220,13 @@ impl Engine {
             ControlEvent::SetModRoute { source, target, amount, smooth } => {
                 self.modmatrix.set(source, target, amount, smooth);
             }
+            ControlEvent::SetText { slot, text } => {
+                let i = slot as usize;
+                if i < self.text_slots.len() {
+                    self.text_slots[i] = text;
+                    self.notices.push(EngineNotice::TextChanged);
+                }
+            }
             ControlEvent::LoadPreset(path) => {
                 if let Err(e) = self.load_preset(&path) {
                     tracing::warn!("preset load failed: {e:#}");
@@ -253,6 +284,16 @@ impl Engine {
             self.params.set(id, ParamValue::Bool(true));
             self.notices.push(EngineNotice::Triggered { path: path.to_string() });
         }
+        // Lettering triggers steer the active slot.
+        if path == "text.clear" {
+            self.text_active = None;
+        } else if let Some(rest) = path.strip_prefix("text.").and_then(|s| s.strip_suffix(".trigger")) {
+            if let Ok(n) = rest.parse::<usize>() {
+                if n < self.text_slots.len() {
+                    self.text_active = Some(n);
+                }
+            }
+        }
     }
 
     /// Advance the free-running musical clock by one frame and refresh the
@@ -306,6 +347,7 @@ impl Engine {
             params: self.params.snapshot(),
             mappings: self.mappings.mappings().to_vec(),
             mod_routes: self.modmatrix.routes().to_vec(),
+            text: self.text_slots.clone(),
         }
     }
 
@@ -316,6 +358,13 @@ impl Engine {
         }
         self.mappings.reindex();
         self.modmatrix.replace_all(preset.mod_routes.clone());
+        // Restore lettering slots (keep the fixed slot count).
+        for (i, t) in preset.text.iter().take(self.text_slots.len()).enumerate() {
+            self.text_slots[i] = t.clone();
+        }
+        if !preset.text.is_empty() {
+            self.notices.push(EngineNotice::TextChanged);
+        }
         // The whole surface changed; notify every known parameter.
         let paths: Vec<String> = self.params.iter().map(|(_, s, _)| s.path.clone()).collect();
         for p in paths {

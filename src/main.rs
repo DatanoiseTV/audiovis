@@ -101,6 +101,26 @@ fn seed_demo_params(engine: &mut Engine) {
         ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 },
     ));
 
+    // Lettering bank: a trigger per slot (bind these to MIDI notes), a clear,
+    // and style knobs. The slot text itself is edited in the web UI.
+    for n in 0..8 {
+        p.register(ParamSpec::new(
+            format!("text.{n}.trigger"),
+            format!("Show {}", n + 1),
+            "Text",
+            ParamKind::Trigger,
+        ));
+    }
+    p.register(ParamSpec::new("text.clear", "Clear", "Text", ParamKind::Trigger));
+    p.register(ParamSpec::new("text.size", "Size", "Text", ParamKind::Float { min: 0.02, max: 0.4, default: 0.1 }));
+    p.register(ParamSpec::new("text.posx", "Pos X", "Text", ParamKind::Float { min: -1.0, max: 1.0, default: 0.0 }));
+    p.register(ParamSpec::new("text.posy", "Pos Y", "Text", ParamKind::Float { min: -1.0, max: 1.0, default: 0.0 }));
+    p.register(ParamSpec::new("text.hue", "Hue", "Text", ParamKind::Float { min: 0.0, max: 1.0, default: 0.0 }));
+    p.register(ParamSpec::new("text.font", "Font", "Text", ParamKind::Int { min: 0, max: 3, default: 0 }));
+    // fx: 0 none, 1 dissolve, 2 wave, 3 tear, 4 scanlines
+    p.register(ParamSpec::new("text.fx", "FX", "Text", ParamKind::Int { min: 0, max: 4, default: 0 }));
+    p.register(ParamSpec::new("text.fxamt", "FX amt", "Text", ParamKind::Float { min: 0.0, max: 1.0, default: 0.5 }));
+
     // Tempo-synced LFOs, available as modulation sources (lfo.1 .. lfo.3). The
     // rate is a musical division of the measure, not free Hz, so they always
     // lock to the beat clock. Defaults: 1 bar, 1/2, 1/4.

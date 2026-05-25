@@ -395,6 +395,62 @@ impl PingPong {
     }
 }
 
+/// Create a plain sampled RGBA8 texture (not a render target). `nearest` keeps
+/// pixel art crisp. `data` may be `None` to allocate uninitialised storage.
+pub fn make_texture(gl: &Gl, width: i32, height: i32, data: Option<&[u8]>, nearest: bool) -> glow::Texture {
+    unsafe {
+        let tex = gl.create_texture().expect("create texture");
+        gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA as i32,
+            width,
+            height,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            glow::PixelUnpackData::Slice(data),
+        );
+        let filter = if nearest { glow::NEAREST } else { glow::LINEAR } as i32;
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+        tex
+    }
+}
+
+/// Replace the contents of an existing RGBA8 texture.
+pub fn update_texture(gl: &Gl, tex: glow::Texture, width: i32, height: i32, data: &[u8]) {
+    unsafe {
+        gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA as i32,
+            width,
+            height,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            glow::PixelUnpackData::Slice(Some(data)),
+        );
+    }
+}
+
+/// Alpha-blend subsequent draws over the framebuffer (for overlays like text).
+pub fn set_blend(gl: &Gl, on: bool) {
+    unsafe {
+        if on {
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        } else {
+            gl.disable(glow::BLEND);
+        }
+    }
+}
+
 /// Bind the window/default framebuffer and set the viewport.
 pub fn bind_screen(gl: &Gl, width: i32, height: i32) {
     unsafe {
