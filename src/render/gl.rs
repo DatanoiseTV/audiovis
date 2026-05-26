@@ -145,6 +145,12 @@ impl Program {
         }
     }
 
+    pub fn set_vec4(&self, name: &str, x: f32, y: f32, z: f32, w: f32) {
+        if let Some(l) = self.loc(name) {
+            unsafe { self.gl.uniform_4_f32(Some(&l), x, y, z, w) }
+        }
+    }
+
     pub fn set_i32(&self, name: &str, v: i32) {
         if let Some(l) = self.loc(name) {
             unsafe { self.gl.uniform_1_i32(Some(&l), v) }

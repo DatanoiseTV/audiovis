@@ -8,6 +8,7 @@ pub mod backend;
 pub mod compositor;
 pub mod generators;
 pub mod gl;
+pub mod isf;
 pub mod media;
 pub mod mesh;
 pub mod pipeline;

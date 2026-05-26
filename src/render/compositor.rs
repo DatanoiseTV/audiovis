@@ -11,6 +11,7 @@ use crate::params::{ParamId, ParamKind, ParamSpec};
 
 use super::generators::{CommonUniforms, GeneratorBank};
 use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program, RenderTexture};
+use super::isf::IsfBank;
 use super::media::MediaBank;
 use super::mesh::MeshBank;
 use super::sim::SimBank;
@@ -48,6 +49,8 @@ pub struct Compositor {
     media: MediaBank,
     /// OBJ wireframe meshes for the wireframe generator.
     mesh: MeshBank,
+    /// ISF shaders for the "isf" generator.
+    isf: IsfBank,
     layer_targets: Vec<RenderTexture>,
     /// Per-layer simulation state, allocated lazily the first time a layer runs
     /// a stateful generator (so a stack of mostly-stateless layers stays cheap).
@@ -74,6 +77,7 @@ impl Compositor {
         let sim_bank = SimBank::new(gl, flavor)?;
         let media = MediaBank::new(gl, flavor, engine)?;
         let mesh = MeshBank::new(gl, flavor, engine)?;
+        let isf = IsfBank::new(gl, flavor, engine, width, height)?;
         // Generators and simulations share one index space.
         let gen_max = (bank.len() + sim_bank.len()).saturating_sub(1) as i64;
 
@@ -137,6 +141,7 @@ impl Compositor {
             sim_bank,
             media,
             mesh,
+            isf,
             layer_targets,
             state,
             last_gen: vec![-1; NUM_LAYERS],
@@ -198,7 +203,7 @@ impl Compositor {
 
     /// Render the full stack into the internal accumulator. The result is left
     /// in [`result`]; presenting it to the screen is the post chain's job.
-    pub fn render(&mut self, quad: &FullscreenQuad, engine: &Engine, time: f32) {
+    pub fn render(&mut self, quad: &FullscreenQuad, engine: &Engine, time: f32, dt: f32, frame: u64) {
         let p = engine.params();
         let res = (self.width as f32, self.height as f32);
 
@@ -230,6 +235,9 @@ impl Compositor {
                 if GeneratorBank::name(gen) == "wireframe" && self.mesh.active(engine) {
                     // Wireframe generator with an OBJ selected: draw geometry.
                     self.mesh.render(engine, time, u.hue, u.p1, self.audio.0, res);
+                } else if GeneratorBank::name(gen) == "isf" {
+                    // ISF generator: run the selected ISF shader into the layer.
+                    self.isf.render(quad, &self.layer_targets[i], engine, time, dt, frame);
                 } else {
                     // The script generator samples the script pixel buffer; every
                     // other generator that wants a texture gets the waveform.
@@ -295,9 +303,24 @@ impl Compositor {
         self.mesh.names().to_vec()
     }
 
-    /// Re-scan the media + mesh directories (picks up newly added files).
+    /// Dropdown labels for the ISF shader source (index 0 = off).
+    pub fn isf_names(&self) -> Vec<String> {
+        self.isf.names().to_vec()
+    }
+
+    /// Pending ISF state to publish (inputs changed); returns (error, inputs).
+    pub fn isf_take_dirty(&mut self) -> Option<(String, Vec<(String, String, usize)>)> {
+        if self.isf.take_dirty() {
+            Some((self.isf.error(), self.isf.input_descriptors()))
+        } else {
+            None
+        }
+    }
+
+    /// Re-scan the media + mesh + ISF directories (picks up newly added files).
     pub fn rescan_media(&mut self) {
         self.media.rescan();
         self.mesh.rescan();
+        self.isf.rescan();
     }
 }

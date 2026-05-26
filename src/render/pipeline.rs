@@ -123,6 +123,16 @@ impl Pipeline {
         self.compositor.mesh_names()
     }
 
+    /// Dropdown labels for the ISF shader source (index 0 = off).
+    pub fn isf_names(&self) -> Vec<String> {
+        self.compositor.isf_names()
+    }
+
+    /// Pending ISF input/error update to publish, if a shader just (re)loaded.
+    pub fn isf_take_dirty(&mut self) -> Option<(String, Vec<(String, String, usize)>)> {
+        self.compositor.isf_take_dirty()
+    }
+
     /// Re-scan the media directory (picks up newly added files).
     pub fn rescan_media(&mut self) {
         self.compositor.rescan_media();
@@ -148,7 +158,7 @@ impl Pipeline {
 
     /// Render one frame, ending with the result on the screen framebuffer.
     pub fn render(&mut self, frame: &FrameContext, engine: &Engine) {
-        self.compositor.render(&self.quad, engine, frame.time);
+        self.compositor.render(&self.quad, engine, frame.time, frame.dt, frame.frame);
         self.post.process(
             &self.quad,
             self.compositor.result(),
