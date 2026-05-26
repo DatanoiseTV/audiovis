@@ -141,6 +141,11 @@ pixel fonts and text FX (dissolve / wave / tear / scanlines) — round it out.
   from the I/O panel.
 - **OSC** — `/p/<param.path> <value>` sets anything; other addresses are
   learnable.
+- **Ableton Link** — sync tempo + beat phase to Ableton Live and other Link
+  peers on the LAN (with start/stop sync); toggle it in the header, peer count
+  shown live. All tempo-synced LFOs share one clock, so they stay phase-coherent
+  and align at the downbeat. Behind the `link` feature
+  (`cargo build --release --features link`).
 - **Audio in** — choose the input device in the I/O panel and tune the analyzer
   live (gain, attack, release, beat sensitivity); they double as modulation
   targets.

@@ -68,6 +68,8 @@ pub enum ControlEvent {
     SetMidiPort(String),
     /// Switch the camera/video input device (empty = first available).
     SetVideoDevice(String),
+    /// Enable/disable Ableton Link tempo sync.
+    SetLink(bool),
     /// Re-scan the media directory for newly added image/SVG files.
     RescanMedia,
 

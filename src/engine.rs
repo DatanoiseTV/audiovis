@@ -35,12 +35,15 @@ struct BeatClock {
     running: bool,
     /// Free-running position in beats, wrapped at [`BEATS_WRAP`].
     beats: f64,
+    /// When set (by Ableton Link), the absolute beat + tempo drive the clock,
+    /// overriding free-run / MIDI for that frame.
+    link: Option<(f64, f32)>,
 }
 
 impl BeatClock {
     fn new() -> Self {
         // Default to free-running so LFOs animate out of the box.
-        Self { last_pulse: None, pulse_dt: 0.5 / 24.0, pulses: 0, running: true, beats: 0.0 }
+        Self { last_pulse: None, pulse_dt: 0.5 / 24.0, pulses: 0, running: true, beats: 0.0, link: None }
     }
 
     /// One MIDI clock pulse: refine the tempo estimate and hard-sync position.
@@ -251,6 +254,7 @@ impl Engine {
             ControlEvent::SetAudioDevice(_)
             | ControlEvent::SetMidiPort(_)
             | ControlEvent::SetVideoDevice(_)
+            | ControlEvent::SetLink(_)
             | ControlEvent::RescanMedia
             | ControlEvent::SetScript(_)
             | ControlEvent::SaveScript { .. }
@@ -350,11 +354,27 @@ impl Engine {
     /// Updates are silent (no notices) since the phase changes every frame; the
     /// UI reads it from telemetry instead.
     pub fn tick_clock(&mut self, dt: f32) {
-        let bpm = self.params.id_of("clock.bpm").map(|id| self.params.get_f32(id)).unwrap_or(120.0);
-        self.clock.advance(dt, bpm);
+        if let Some((link_beats, link_bpm)) = self.clock.link {
+            // Ableton Link is master: take its absolute beat + tempo.
+            self.clock.beats = link_beats.rem_euclid(BEATS_WRAP);
+            self.params.set_path("clock.bpm", ParamValue::Float(link_bpm.clamp(20.0, 300.0)));
+        } else {
+            let bpm = self.params.id_of("clock.bpm").map(|id| self.params.get_f32(id)).unwrap_or(120.0);
+            self.clock.advance(dt, bpm);
+        }
         let beats = self.clock.beats();
         self.params.set_path("clock.beat", ParamValue::Float(beats.rem_euclid(1.0) as f32));
         self.params.set_path("clock.bar", ParamValue::Float((beats / 4.0).rem_euclid(1.0) as f32));
+    }
+
+    /// Drive the clock from an Ableton Link session (absolute beat + tempo).
+    pub fn sync_link(&mut self, beats: f64, bpm: f32) {
+        self.clock.link = Some((beats, bpm));
+    }
+
+    /// Stop Link driving the clock (back to free-run / MIDI).
+    pub fn clear_link(&mut self) {
+        self.clock.link = None;
     }
 
     /// Free-running musical position in beats (wrapped), for tempo-synced LFOs.

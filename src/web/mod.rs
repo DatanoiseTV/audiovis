@@ -313,8 +313,8 @@ impl WebHandle {
 
     /// Publish audio/clock telemetry (call at a modest rate, not every frame).
     #[allow(clippy::too_many_arguments)]
-    pub fn publish_telemetry(&self, low: f32, mid: f32, high: f32, rms: f32, beat: f32, bpm: f32, beat_phase: f32, bar_phase: f32, beats: f32) {
-        let t = proto::Telemetry { low, mid, high, rms, beat, bpm, beat_phase, bar_phase, beats };
+    pub fn publish_telemetry(&self, low: f32, mid: f32, high: f32, rms: f32, beat: f32, bpm: f32, beat_phase: f32, bar_phase: f32, beats: f32, link_peers: i32, link_enabled: bool) {
+        let t = proto::Telemetry { low, mid, high, rms, beat, bpm, beat_phase, bar_phase, beats, link_peers, link_enabled };
         if let Ok(mut s) = self.snapshot.write() {
             s.telemetry = t.clone();
         }
@@ -369,6 +369,9 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
     }
     if msg.rescan_media {
         out.push(ControlEvent::RescanMedia);
+    }
+    if let Some(l) = msg.link {
+        out.push(ControlEvent::SetLink(l.enabled));
     }
     if let Some(sc) = msg.script {
         match sc.action.as_str() {

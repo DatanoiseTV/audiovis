@@ -10,6 +10,7 @@ mod cli;
 mod config;
 mod control;
 mod engine;
+mod link;
 mod params;
 mod presets;
 mod render;

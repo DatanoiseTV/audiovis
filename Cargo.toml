@@ -1,6 +1,6 @@
 [package]
 name = "audiovis"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.82"
 description = "Live audio-reactive VJ visualizer with VHS / analog-video aesthetics, controllable over MIDI, OSC and a web UI"
@@ -21,6 +21,8 @@ default = ["script"]
 camera = ["dep:nokhwa"]
 # Embedded JS scripting runtime (automation + a 2D pixel buffer generator).
 script = ["dep:boa_engine"]
+# Ableton Link tempo/beat sync over the LAN (bundles the Link C++ lib).
+link = ["dep:rusty_link"]
 
 [dependencies]
 anyhow = "1"
@@ -67,6 +69,7 @@ resvg = { version = "0.44", default-features = false }
 # v4l2). Optional: only built with the `camera` feature.
 nokhwa = { version = "0.10", features = ["input-native"], optional = true }
 boa_engine = { version = "0.20", optional = true }
+rusty_link = { version = "0.4.9", optional = true }
 
 [build-dependencies]
 # Pure-Rust protobuf compilation: no system `protoc` needed.

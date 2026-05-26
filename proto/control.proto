@@ -34,6 +34,8 @@ message Telemetry {
   float beat_phase = 7;
   float bar_phase = 8;
   float beats = 9; // free-running musical position (beats, wrapped) for LFO previews
+  int32 link_peers = 10;  // Ableton Link peers on the network
+  bool link_enabled = 11; // whether Link sync is on
 }
 
 // A named, triggerable text slot (the lettering bank).
@@ -171,6 +173,11 @@ message ScriptCmd {
   string source = 3;
 }
 
+// Enable/disable Ableton Link tempo sync.
+message LinkCmd {
+  bool enabled = 1;
+}
+
 message ClientMsg {
   SetParam set = 1;
   LearnCmd learn = 2;
@@ -181,4 +188,5 @@ message ClientMsg {
   // Re-scan the media directory for newly added files.
   bool rescan_media = 7;
   ScriptCmd script = 8;
+  LinkCmd link = 9;
 }

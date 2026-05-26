@@ -26,6 +26,7 @@ use crate::cli::Cli;
 use crate::control::midi::MidiInputs;
 use crate::control::{ControlBus, ControlEvent};
 use crate::engine::Engine;
+use crate::link::LinkEngine;
 use crate::params::ParamValue;
 use crate::presets::PresetStore;
 use crate::script::{ScriptAction, ScriptEngine, ScriptSignals, ScriptStore};
@@ -53,6 +54,8 @@ pub fn run(
     // the device can be switched live.
     let audio_shared = audio.shared();
     let video_shared = video.shared();
+    let mut link = LinkEngine::new();
+    link.set_enabled(cli.link);
 
     let max_frames = if cli.frames > 0 {
         Some(cli.frames)
@@ -73,6 +76,7 @@ pub fn run(
         video,
         video_shared,
         last_video_seq: 0,
+        link,
         web,
         presets: PresetStore::new(),
         current_preset: String::new(),
@@ -113,6 +117,8 @@ struct WindowApp {
     video: VideoEngine,
     video_shared: Arc<VideoShared>,
     last_video_seq: u64,
+    /// Ableton Link tempo sync (drives the beat clock when enabled).
+    link: LinkEngine,
     web: Option<WebHandle>,
     presets: PresetStore,
     current_preset: String,
@@ -300,6 +306,7 @@ impl WindowApp {
                     self.video.set_device(&name);
                     self.publish_devices();
                 }
+                ControlEvent::SetLink(on) => self.link.set_enabled(on),
                 ControlEvent::RescanMedia => {
                     if let Some(gfx) = self.gfx.as_mut() {
                         gfx.pipeline.rescan_media();
@@ -343,6 +350,11 @@ impl WindowApp {
         self.last = now;
         let time = now.duration_since(self.start).as_secs_f32();
 
+        // If Ableton Link is on, let the session drive the beat clock.
+        match self.link.state(4.0) {
+            Some((bpm, beats)) => self.engine.sync_link(beats, bpm),
+            None => self.engine.clear_link(),
+        }
         // Advance the musical clock so tempo-synced LFOs and clock phases move.
         self.engine.tick_clock(dt);
 
@@ -424,7 +436,7 @@ impl WindowApp {
             if self.frame % 4 == 0 {
                 let p = self.engine.params();
                 let read = |path: &str, dflt: f32| p.id_of(path).map(|id| p.get_f32(id)).unwrap_or(dflt);
-                web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0), read("clock.bar", 0.0), self.engine.musical_beats() as f32);
+                web.publish_telemetry(low, mid, high, rms, beat, read("clock.bpm", 120.0), read("clock.beat", 0.0), read("clock.bar", 0.0), self.engine.musical_beats() as f32, self.link.peers() as i32, self.link.enabled());
                 web.publish_mod_routes(&self.engine);
                 web.publish_text(self.engine.text_slots());
                 web.publish_mappings(self.engine.mappings_list());

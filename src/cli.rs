@@ -49,6 +49,10 @@ pub struct Cli {
     #[arg(long, env = "AV_CAMERA_DEVICE", default_value = "")]
     pub camera_device: String,
 
+    /// Enable Ableton Link tempo sync at startup (requires the `link` feature).
+    #[arg(long, env = "AV_LINK", default_value_t = false)]
+    pub link: bool,
+
     /// UDP address to listen on for OSC control messages.
     #[arg(long, env = "AV_OSC_LISTEN", default_value = "0.0.0.0:9000")]
     pub osc_listen: String,

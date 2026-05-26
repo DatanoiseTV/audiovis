@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-34";
+const UI_BUILD = "ui-35";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -52,6 +52,7 @@ let fxCards = [];            // {card, enablePath, orderPath, name, pos} per FX 
 let lfoCards = [];           // {card, enablePath, canvas} per LFO
 let latestTelemetry = null;
 let blackoutPrev = null; // brightness remembered while blacked out
+let linkEnabled = false; // Ableton Link state (from telemetry)
 let presetList = [];
 let currentPreset = "";
 const textSlots = [];
@@ -96,6 +97,8 @@ function setupTransport() {
 
   const bo = document.getElementById("blackout");
   bo.onclick = () => toggleBlackout();
+  const lk = document.getElementById("link");
+  if (lk) lk.onclick = () => send({ link: { enabled: !linkEnabled } });
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); toggleBlackout(); }
   });
@@ -1293,6 +1296,14 @@ function applyTelemetry(t) {
   driveWidget("clock.bpm", t.bpm || 0);
   driveWidget("clock.beat", t.beat_phase || 0);
   driveWidget("clock.bar", t.bar_phase || 0);
+
+  // Ableton Link button: lit when enabled, with the peer count.
+  linkEnabled = !!t.link_enabled;
+  const lb = document.getElementById("link");
+  if (lb) {
+    lb.classList.toggle("active", linkEnabled);
+    lb.textContent = linkEnabled ? `LINK · ${t.link_peers || 0}` : "LINK";
+  }
 }
 
 // Update a widget from a raw value (computing its normalised position), without
