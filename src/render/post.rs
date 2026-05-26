@@ -37,11 +37,24 @@ enum FxType {
     Vhs,
     Glitch,
     Bloom,
+    Chromatic,
+    Blur,
+    Grade,
 }
 
 impl FxType {
-    const ALL: [FxType; 7] =
-        [FxType::Feedback, FxType::Mirror, FxType::Hue, FxType::LoFi, FxType::Vhs, FxType::Glitch, FxType::Bloom];
+    const ALL: [FxType; 10] = [
+        FxType::Feedback,
+        FxType::Mirror,
+        FxType::Hue,
+        FxType::LoFi,
+        FxType::Vhs,
+        FxType::Glitch,
+        FxType::Bloom,
+        FxType::Chromatic,
+        FxType::Blur,
+        FxType::Grade,
+    ];
 
     /// Short id used in parameter paths.
     fn id(self) -> &'static str {
@@ -53,6 +66,9 @@ impl FxType {
             FxType::Vhs => "vhs",
             FxType::Glitch => "glitch",
             FxType::Bloom => "bloom",
+            FxType::Chromatic => "chromatic",
+            FxType::Blur => "blur",
+            FxType::Grade => "grade",
         }
     }
 
@@ -66,6 +82,9 @@ impl FxType {
             FxType::Vhs => "VHS",
             FxType::Glitch => "Glitch",
             FxType::Bloom => "Bloom",
+            FxType::Chromatic => "Chromatic",
+            FxType::Blur => "Soft focus",
+            FxType::Grade => "Colour grade",
         }
     }
 }
@@ -94,6 +113,9 @@ enum FxParams {
     Vhs { aberration: ParamId, bleed: ParamId, scan: ParamId, noise: ParamId, wobble: ParamId, vignette: ParamId, sat: ParamId },
     Glitch { intensity: ParamId, blocks: ParamId, shift: ParamId, crush: ParamId, rate: ParamId },
     Bloom { amount: ParamId, threshold: ParamId },
+    Chromatic { amount: ParamId, vignette: ParamId },
+    Blur { amount: ParamId },
+    Grade { mix: ParamId, hue: ParamId, contrast: ParamId },
 }
 
 /// Shared, compile-once programs (one per effect type, plus feedback's blit).
@@ -106,6 +128,9 @@ struct Programs {
     vhs: Program,
     glitch: Program,
     bloom: Program,
+    chromatic: Program,
+    blur: Program,
+    grade: Program,
 }
 
 pub struct PostChain {
@@ -155,6 +180,9 @@ impl PostChain {
             vhs: prog(include_str!("shaders/post/vhs.frag")).map_err(|e| format!("vhs: {e}"))?,
             glitch: prog(include_str!("shaders/post/glitch.frag")).map_err(|e| format!("glitch: {e}"))?,
             bloom: prog(include_str!("shaders/post/bloom.frag")).map_err(|e| format!("bloom: {e}"))?,
+            chromatic: prog(include_str!("shaders/post/chromatic.frag")).map_err(|e| format!("chromatic: {e}"))?,
+            blur: prog(include_str!("shaders/post/blur.frag")).map_err(|e| format!("blur: {e}"))?,
+            grade: prog(include_str!("shaders/post/grade.frag")).map_err(|e| format!("grade: {e}"))?,
         };
         let present = Program::new(gl, flavor, vert, include_str!("shaders/composite/copy.frag"))?;
 
@@ -331,6 +359,28 @@ impl PostChain {
                 prog.set_f32("u_amount", p.get_f32(*amount));
                 prog.set_f32("u_threshold", p.get_f32(*threshold));
             }
+            FxParams::Chromatic { amount, vignette } => {
+                let prog = &self.progs.chromatic;
+                prog.bind();
+                prog.set_texture("u_tex", 0, src);
+                prog.set_f32("u_amount", p.get_f32(*amount));
+                prog.set_f32("u_vignette", p.get_f32(*vignette));
+            }
+            FxParams::Blur { amount } => {
+                let prog = &self.progs.blur;
+                prog.bind();
+                prog.set_texture("u_tex", 0, src);
+                prog.set_vec2("u_res", res.0, res.1);
+                prog.set_f32("u_amount", p.get_f32(*amount));
+            }
+            FxParams::Grade { mix, hue, contrast } => {
+                let prog = &self.progs.grade;
+                prog.bind();
+                prog.set_texture("u_tex", 0, src);
+                prog.set_f32("u_mix", p.get_f32(*mix));
+                prog.set_f32("u_hue", p.get_f32(*hue));
+                prog.set_f32("u_contrast", p.get_f32(*contrast));
+            }
         }
     }
 }
@@ -390,6 +440,18 @@ fn register_instance(engine: &mut Engine, ty: FxType, inst: usize, type_index: u
         FxType::Bloom => FxParams::Bloom {
             amount: reg(store, "amount", "Amount", f(0.0, 1.0, 0.5)),
             threshold: reg(store, "threshold", "Threshold", f(0.0, 1.0, 0.6)),
+        },
+        FxType::Chromatic => FxParams::Chromatic {
+            amount: reg(store, "amount", "Aberration", f(0.0, 1.0, 0.4)),
+            vignette: reg(store, "vignette", "Vignette", f(0.0, 1.0, 0.3)),
+        },
+        FxType::Blur => FxParams::Blur {
+            amount: reg(store, "amount", "Radius", f(0.0, 1.0, 0.4)),
+        },
+        FxType::Grade => FxParams::Grade {
+            mix: reg(store, "mix", "Mix", f(0.0, 1.0, 0.8)),
+            hue: reg(store, "hue", "Hue", f(0.0, 1.0, 0.6)),
+            contrast: reg(store, "contrast", "Contrast", f(0.0, 1.0, 0.3)),
         },
     };
 

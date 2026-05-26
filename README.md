@@ -47,11 +47,12 @@ two-way synced over a protobuf websocket.
 
 ## Generators
 
-39 of them — procedural fields, demoscene classics, fractals, a stereo scope, a
-morphing wireframe solid (which can also load OBJ meshes), a JS-scripted pixel
-buffer, and three living simulations (reaction-diffusion, spiral-wave excitable
-medium, curl-noise smoke). The layer stack is dynamic — **add and remove
-generator layers** (up to eight), each running any generator.
+Forty-plus — retro/demoscene classics and fractals, **modern looks** (aurora
+curtains, a smooth mesh-gradient, dreamy bokeh), a stereo scope, a morphing
+wireframe solid (which can also load OBJ meshes), a JS-scripted pixel buffer,
+**ISF** shaders, and three living simulations (reaction-diffusion, spiral-wave
+excitable medium, curl-noise smoke). The layer stack is dynamic — **add and
+remove generator layers** (up to eight), each running any generator.
 
 ![generators](docs/img/generators.png)
 
@@ -61,8 +62,9 @@ A **dynamic, reorderable FX rack**: add and remove effect instances, drag them
 up and down the chain, and run more than one of the same kind (e.g. two
 independent glitches). The effect types are **feedback** (infinite-zoom trails),
 **mirror / kaleidoscope**, **hue-cycle**, **lo-fi** (pixelate + posterize),
-analog **VHS**, **glitch / datamosh** and **bloom** — each toggleable and fully
-modulatable.
+analog **VHS**, **glitch / datamosh**, **bloom**, plus modern grades —
+**chromatic aberration**, **soft-focus blur** and a duotone **colour grade** —
+each toggleable and fully modulatable.
 
 ![effects](docs/img/fx.png)
 

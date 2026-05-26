@@ -63,6 +63,10 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("script", "shaders/gen/script.frag"),
     // Runs the selected ISF shader (handled specially by the compositor).
     gen!("isf", "shaders/gen/isf_placeholder.frag"),
+    // Modern / clean looks (not retro).
+    gen!("aurora", "shaders/gen/aurora.frag"),
+    gen!("gradient", "shaders/gen/gradient.frag"),
+    gen!("bokeh", "shaders/gen/bokeh.frag"),
 ];
 
 /// The values fed to a generator for one draw.
