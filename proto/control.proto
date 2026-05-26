@@ -102,6 +102,9 @@ message ServerMsg {
   repeated IsfInput isf_inputs = 28;
   bool isf_inputs_present = 29;
   string isf_error = 30;
+  // Camera/video input devices (part of the devices block).
+  repeated string camera_devices = 31;
+  string camera_device = 32;
 }
 
 // One ISF shader input, bound to the parameter pool starting at `slot`.

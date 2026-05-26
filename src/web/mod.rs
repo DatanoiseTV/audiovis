@@ -45,6 +45,8 @@ struct Snapshot {
     audio_device: String,
     midi_ports: Vec<String>,
     midi_port: String,
+    camera_devices: Vec<String>,
+    camera_device: String,
     scripts: Vec<String>,
     meshes: Vec<String>,
     isf_shaders: Vec<String>,
@@ -162,19 +164,32 @@ impl WebHandle {
         let _ = self.out.send(msg.encode_to_vec());
     }
 
-    /// Publish the available + selected audio/MIDI input devices.
-    pub fn publish_devices(&self, audio_devices: Vec<String>, audio_device: &str, midi_ports: Vec<String>, midi_port: &str) {
+    /// Publish the available + selected audio/MIDI/camera input devices.
+    #[allow(clippy::too_many_arguments)]
+    pub fn publish_devices(
+        &self,
+        audio_devices: Vec<String>,
+        audio_device: &str,
+        midi_ports: Vec<String>,
+        midi_port: &str,
+        camera_devices: Vec<String>,
+        camera_device: &str,
+    ) {
         if let Ok(mut s) = self.snapshot.write() {
             s.audio_devices = audio_devices.clone();
             s.audio_device = audio_device.to_string();
             s.midi_ports = midi_ports.clone();
             s.midi_port = midi_port.to_string();
+            s.camera_devices = camera_devices.clone();
+            s.camera_device = camera_device.to_string();
         }
         let msg = proto::ServerMsg {
             audio_devices,
             audio_device: audio_device.to_string(),
             midi_ports,
             midi_port: midi_port.to_string(),
+            camera_devices,
+            camera_device: camera_device.to_string(),
             devices_present: true,
             ..Default::default()
         };
@@ -348,6 +363,7 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
         match d.kind.as_str() {
             "audio" => out.push(ControlEvent::SetAudioDevice(d.name)),
             "midi" => out.push(ControlEvent::SetMidiPort(d.name)),
+            "camera" => out.push(ControlEvent::SetVideoDevice(d.name)),
             _ => {}
         }
     }

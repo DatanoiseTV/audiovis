@@ -29,6 +29,7 @@ use crate::engine::Engine;
 use crate::params::ParamValue;
 use crate::presets::PresetStore;
 use crate::script::{ScriptAction, ScriptEngine, ScriptSignals, ScriptStore};
+use crate::video::{VideoEngine, VideoShared};
 use crate::web::WebHandle;
 use crate::render::gl::{self, Gl};
 use crate::render::pipeline::Pipeline;
@@ -42,6 +43,7 @@ pub fn run(
     bus: ControlBus,
     audio: AudioEngine,
     midi: MidiInputs,
+    video: VideoEngine,
     web: Option<WebHandle>,
 ) -> Result<()> {
     let event_loop = EventLoop::new()?;
@@ -50,6 +52,7 @@ pub fn run(
     // The renderer reads the shared feature block; the engine itself is held so
     // the device can be switched live.
     let audio_shared = audio.shared();
+    let video_shared = video.shared();
 
     let max_frames = if cli.frames > 0 {
         Some(cli.frames)
@@ -67,6 +70,9 @@ pub fn run(
         audio,
         audio_shared,
         midi,
+        video,
+        video_shared,
+        last_video_seq: 0,
         web,
         presets: PresetStore::new(),
         current_preset: String::new(),
@@ -103,6 +109,10 @@ struct WindowApp {
     audio_shared: Arc<AudioShared>,
     /// Owns the MIDI connections so the hardware port can be switched live.
     midi: MidiInputs,
+    /// Owns the camera capture so the device can be switched live.
+    video: VideoEngine,
+    video_shared: Arc<VideoShared>,
+    last_video_seq: u64,
     web: Option<WebHandle>,
     presets: PresetStore,
     current_preset: String,
@@ -218,7 +228,7 @@ impl WindowApp {
         }
     }
 
-    /// Publish the available + selected audio/MIDI input devices to the web UI.
+    /// Publish the available + selected audio/MIDI/camera input devices.
     fn publish_devices(&self) {
         if let Some(web) = &self.web {
             web.publish_devices(
@@ -226,6 +236,8 @@ impl WindowApp {
                 self.audio.current_device(),
                 MidiInputs::list_ports(),
                 self.midi.current_filter(),
+                VideoEngine::list_devices(),
+                self.video.current_device(),
             );
         }
     }
@@ -281,6 +293,11 @@ impl WindowApp {
                 ControlEvent::SetMidiPort(name) => {
                     tracing::info!("switching MIDI input to '{}'", if name.is_empty() { "all" } else { &name });
                     self.midi.set_port(&name);
+                    self.publish_devices();
+                }
+                ControlEvent::SetVideoDevice(name) => {
+                    tracing::info!("switching camera to '{}'", if name.is_empty() { "default" } else { &name });
+                    self.video.set_device(&name);
                     self.publish_devices();
                 }
                 ControlEvent::RescanMedia => {
@@ -417,6 +434,12 @@ impl WindowApp {
         let Some(gfx) = self.gfx.as_mut() else { return };
         gfx.pipeline.set_audio(low, mid, high, beat);
         gfx.pipeline.set_waveform(&self.wave_buf);
+        // Upload the latest camera frame (only when a new one has arrived).
+        let vseq = self.video_shared.seq();
+        if vseq != self.last_video_seq {
+            self.last_video_seq = vseq;
+            self.video_shared.with_frame(|f| gfx.pipeline.set_camera_frame(f.w, f.h, &f.rgba));
+        }
         let size = gfx.window.inner_size();
         let fc = FrameContext {
             time,

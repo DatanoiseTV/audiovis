@@ -69,6 +69,8 @@ pub struct Compositor {
     wave_tex: Option<glow::Texture>,
     /// Pixel-buffer texture for the script generator (owned by the pipeline).
     script_tex: Option<glow::Texture>,
+    /// Live camera frame texture for the camera generator (owned by the pipeline).
+    camera_tex: Option<glow::Texture>,
 }
 
 impl Compositor {
@@ -154,6 +156,7 @@ impl Compositor {
             beat: 0.0,
             wave_tex: None,
             script_tex: None,
+            camera_tex: None,
         })
     }
 
@@ -165,6 +168,11 @@ impl Compositor {
     /// Set the pixel-buffer texture sampled by the script generator.
     pub fn set_script_tex(&mut self, tex: glow::Texture) {
         self.script_tex = Some(tex);
+    }
+
+    /// Set the camera-frame texture sampled by the camera generator.
+    pub fn set_camera_tex(&mut self, tex: glow::Texture) {
+        self.camera_tex = Some(tex);
     }
 
     pub fn generator_count(&self) -> usize {
@@ -239,9 +247,13 @@ impl Compositor {
                     // ISF generator: run the selected ISF shader into the layer.
                     self.isf.render(quad, &self.layer_targets[i], engine, time, dt, frame);
                 } else {
-                    // The script generator samples the script pixel buffer; every
-                    // other generator that wants a texture gets the waveform.
-                    let aux = if GeneratorBank::name(gen) == "script" { self.script_tex } else { self.wave_tex };
+                    // Pick the aux texture by generator: script buffer, camera
+                    // frame, or the waveform for everything else.
+                    let aux = match GeneratorBank::name(gen) {
+                        "script" => self.script_tex,
+                        "camera" => self.camera_tex,
+                        _ => self.wave_tex,
+                    };
                     self.bank.draw(gen, quad, &u, aux.unwrap_or(self.layer_targets[i].texture()));
                 }
                 self.last_gen[i] = gen as i64;

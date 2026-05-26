@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-33";
+const UI_BUILD = "ui-34";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -42,7 +42,7 @@ let meshNames = ["(shapes)"];
 let isfShaders = ["(off)"]; // ISF shader file names
 let isfInputs = [];          // [{label, kind, slot}] for the selected shader
 let modSources = [];
-let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
+let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "", cameraDevices = [], cameraDevice = "";
 let mediaSourceSelects = []; // {sel, fill} for live source-dropdown refresh
 let mediaDeck = 0;           // which media layer the browser loads into
 let scriptNames = [];        // available script names (builtins + user)
@@ -168,6 +168,8 @@ function connect() {
         audioDevice = msg.audio_device || "";
         midiPorts = msg.midi_ports || [];
         midiPort = msg.midi_port || "";
+        cameraDevices = msg.camera_devices || [];
+        cameraDevice = msg.camera_device || "";
         renderDevices();
       }
       if (msg.script_present) {
@@ -1038,6 +1040,8 @@ function renderDevices() {
   devicesEl.innerHTML = "";
   devicesEl.appendChild(devicePicker("Audio in", "audio", audioDevices, audioDevice, "system default"));
   devicesEl.appendChild(devicePicker("MIDI in", "midi", midiPorts, midiPort, "all ports"));
+  devicesEl.appendChild(devicePicker("Camera", "camera", cameraDevices, cameraDevice,
+    cameraDevices.length ? "first available" : "(camera feature off)"));
 }
 
 // --- JS scripting panel ---

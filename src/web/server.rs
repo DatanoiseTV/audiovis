@@ -171,6 +171,8 @@ fn initial_state(state: &AppState) -> Vec<u8> {
         audio_device: s.audio_device.clone(),
         midi_ports: s.midi_ports.clone(),
         midi_port: s.midi_port.clone(),
+        camera_devices: s.camera_devices.clone(),
+        camera_device: s.camera_device.clone(),
         devices_present: true,
         scripts: s.scripts.clone(),
         script_present: true,

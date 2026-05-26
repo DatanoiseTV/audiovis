@@ -29,6 +29,8 @@ pub struct Pipeline {
     wave_tex: glow::Texture,
     /// Pixel-buffer texture the JS script draws into (nearest-filtered).
     script_tex: glow::Texture,
+    /// Live camera frame texture (re-uploaded when a new frame arrives).
+    camera_tex: glow::Texture,
     /// Small target the final frame is copied into for the web monitor.
     preview: RenderTexture,
     render_scale: f32,
@@ -55,6 +57,8 @@ impl Pipeline {
         compositor.set_wave_tex(wave_tex);
         let script_tex = gl::make_texture(gl, crate::script::SCRIPT_W as i32, crate::script::SCRIPT_H as i32, None, true);
         compositor.set_script_tex(script_tex);
+        let camera_tex = gl::make_texture(gl, 1, 1, Some(&[0, 0, 0, 255]), false);
+        compositor.set_camera_tex(camera_tex);
         let preview = RenderTexture::new(gl, PREVIEW_W, PREVIEW_H)?;
         Ok(Self {
             gl: gl.clone(),
@@ -64,6 +68,7 @@ impl Pipeline {
             text,
             wave_tex,
             script_tex,
+            camera_tex,
             preview,
             render_scale: scale,
             out_w: width.max(1),
@@ -106,6 +111,11 @@ impl Pipeline {
     /// script generator to display.
     pub fn set_script_buffer(&self, rgba: &[u8]) {
         gl::update_texture(&self.gl, self.script_tex, crate::script::SCRIPT_W as i32, crate::script::SCRIPT_H as i32, rgba);
+    }
+
+    /// Upload a camera frame (RGBA, top-down) for the camera generator.
+    pub fn set_camera_frame(&self, w: u32, h: u32, rgba: &[u8]) {
+        gl::update_texture(&self.gl, self.camera_tex, w as i32, h as i32, rgba);
     }
 
     /// Number of generators available, for the UI.

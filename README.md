@@ -84,6 +84,14 @@ The wireframe generator morphs procedural solids, or **loads OBJ models** from a
 `meshes/` folder and draws them as rotating, hue-tinted wireframes — pick a mesh
 from the dropdown, drop your own `.obj` in and Rescan.
 
+## Video input
+
+A **camera** generator brings in live webcam / v4l video as a layer (macOS
+AVFoundation, Linux v4l2, via `nokhwa`) — pick the device in the I/O panel and
+run it through the layers, transforms, effects and modulation like any other
+source. It's behind the `camera` feature (extra capture deps), so build with
+`cargo build --release --features camera`; without it the camera slot is inert.
+
 ## ISF shaders
 
 Loads **ISF** ([interactive shader format](https://isf.video/)) `.fs` files from

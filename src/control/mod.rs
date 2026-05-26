@@ -66,6 +66,8 @@ pub enum ControlEvent {
     SetAudioDevice(String),
     /// Switch the MIDI hardware input filter (empty connects to all ports).
     SetMidiPort(String),
+    /// Switch the camera/video input device (empty = first available).
+    SetVideoDevice(String),
     /// Re-scan the media directory for newly added image/SVG files.
     RescanMedia,
 

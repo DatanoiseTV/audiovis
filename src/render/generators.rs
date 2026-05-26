@@ -67,6 +67,8 @@ pub static GENERATORS: &[GenDef] = &[
     gen!("aurora", "shaders/gen/aurora.frag"),
     gen!("gradient", "shaders/gen/gradient.frag"),
     gen!("bokeh", "shaders/gen/bokeh.frag"),
+    // Live camera / video input (handled specially by the compositor).
+    gen!("camera", "shaders/gen/camera.frag"),
 ];
 
 /// The values fed to a generator for one draw.

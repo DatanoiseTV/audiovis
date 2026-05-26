@@ -10,6 +10,7 @@ use crate::control::osc::OscInput;
 use crate::control::ControlBus;
 use crate::engine::Engine;
 use crate::render::backend;
+use crate::video::VideoEngine;
 use crate::web::WebHandle;
 
 /// Resolve `auto` to a concrete backend for the current platform.
@@ -30,6 +31,10 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
     // for the run so it can switch the input device live; the renderer reads
     // the shared feature block each frame.
     let audio = AudioEngine::start(&cli.audio_device, cli.audio_gain);
+
+    // Camera capture (no-op without the `camera` feature). Owned by the backend
+    // so the device can be switched live; the renderer reads the latest frame.
+    let video = VideoEngine::start(&cli.camera_device);
 
     // Start control inputs. MIDI is handed to the backend so the device can be
     // changed at runtime; OSC stays here for the run.
@@ -54,7 +59,7 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
     };
 
     match resolve(cli.backend) {
-        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio, midi, web),
+        Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio, midi, video, web),
         Backend::Drm => {
             // Wired up in the Linux DRM/KMS milestone; until then, be explicit
             // rather than silently falling back.

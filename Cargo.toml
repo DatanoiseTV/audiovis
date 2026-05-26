@@ -1,6 +1,6 @@
 [package]
 name = "audiovis"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.82"
 description = "Live audio-reactive VJ visualizer with VHS / analog-video aesthetics, controllable over MIDI, OSC and a web UI"
@@ -18,7 +18,7 @@ path = "src/main.rs"
 # drop it with `--no-default-features` for the leanest binary on weak ARM SoCs.
 default = ["script"]
 # USB webcam / v4l / video-file input layer (pulls in extra decode deps).
-camera = []
+camera = ["dep:nokhwa"]
 # Embedded JS scripting runtime (automation + a 2D pixel buffer generator).
 script = ["dep:boa_engine"]
 
@@ -62,6 +62,10 @@ jpeg-encoder = "0.6.1"
 # when a media layer loads a file, so the cost is one-off at load time.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 resvg = { version = "0.44", default-features = false }
+
+# Webcam / v4l capture for the video input layer (macOS AVFoundation + Linux
+# v4l2). Optional: only built with the `camera` feature.
+nokhwa = { version = "0.10", features = ["input-native"], optional = true }
 boa_engine = { version = "0.20", optional = true }
 
 [build-dependencies]

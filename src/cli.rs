@@ -44,6 +44,11 @@ pub struct Cli {
     #[arg(long, env = "AV_MIDI_PORT", default_value = "")]
     pub midi_port: String,
 
+    /// Camera/video input device name substring (empty = first available).
+    /// Requires the `camera` feature; the camera generator shows it.
+    #[arg(long, env = "AV_CAMERA_DEVICE", default_value = "")]
+    pub camera_device: String,
+
     /// UDP address to listen on for OSC control messages.
     #[arg(long, env = "AV_OSC_LISTEN", default_value = "0.0.0.0:9000")]
     pub osc_listen: String,

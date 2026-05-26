@@ -15,6 +15,7 @@ mod presets;
 mod render;
 mod script;
 mod version;
+mod video;
 mod web;
 
 use anyhow::Result;

@@ -250,6 +250,7 @@ impl Engine {
             // window backend, which intercepts these before they reach the engine.
             ControlEvent::SetAudioDevice(_)
             | ControlEvent::SetMidiPort(_)
+            | ControlEvent::SetVideoDevice(_)
             | ControlEvent::RescanMedia
             | ControlEvent::SetScript(_)
             | ControlEvent::SaveScript { .. }
