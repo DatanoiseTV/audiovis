@@ -175,6 +175,8 @@ fn initial_state(state: &AppState) -> Vec<u8> {
         scripts: s.scripts.clone(),
         script_present: true,
         meshes: s.meshes.clone(),
+        isf_shaders: s.isf_shaders.clone(),
+        isf_present: true,
         ..Default::default()
     };
     msg.encode_to_vec()

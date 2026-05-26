@@ -8,7 +8,7 @@
 
 // Bump on every UI change so it is obvious in the console whether the browser
 // is running fresh assets or a stale cached copy.
-const UI_BUILD = "ui-32";
+const UI_BUILD = "ui-33";
 console.log(`audiovis ${UI_BUILD} loaded`);
 
 const BLEND_NAMES = ["normal", "add", "screen", "multiply", "difference"];
@@ -39,6 +39,8 @@ const paramValues = new Map(); // path -> { value, norm }, latest known
 let generators = [];
 let mediaFiles = ["(none)"];
 let meshNames = ["(shapes)"];
+let isfShaders = ["(off)"]; // ISF shader file names
+let isfInputs = [];          // [{label, kind, slot}] for the selected shader
 let modSources = [];
 let audioDevices = [], audioDevice = "", midiPorts = [], midiPort = "";
 let mediaSourceSelects = []; // {sel, fill} for live source-dropdown refresh
@@ -173,6 +175,8 @@ function connect() {
         if (msg.script) setScriptEditor(msg.script);
       }
       if (msg.script_error_present) showScriptError(msg.script_error || "");
+      if (msg.isf_present && msg.isf_shaders && msg.isf_shaders.length) { isfShaders = msg.isf_shaders; renderIsfShaders(); }
+      if (msg.isf_inputs_present) { isfInputs = msg.isf_inputs || []; renderIsfInputs(); showIsfError(msg.isf_error || ""); }
       if (msg.preview && msg.preview.length) updatePreview(msg.preview);
     } catch (e) {
       console.error("decode error", e);
@@ -260,6 +264,7 @@ function buildUI(schema) {
   const names = [...groups.keys()].sort((a, b) => groupOrder(a) - groupOrder(b));
   for (const name of names) {
     if (name === "Text") { main.appendChild(buildLettering(groups.get(name))); continue; }
+    if (name === "ISF") continue; // raw pool params; the ISF panel renders these
     const specs = groups.get(name);
     const fxEnable = specs.find((s) => /^post\..*\.enable$/.test(s.path));
     const isLayer = name.startsWith("Layer");
@@ -346,6 +351,7 @@ function buildUI(schema) {
   refreshFx();
   main.appendChild(buildDevices());
   main.appendChild(buildScript());
+  main.appendChild(buildIsf());
   main.appendChild(buildMappings());
   main.appendChild(buildMatrix());
   main.appendChild(buildPresets());
@@ -1113,6 +1119,66 @@ function showScriptError(err) {
   scriptErrEl.classList.toggle("on", !!err);
 }
 
+// --- ISF (interactive shader format) panel ---
+
+let isfShaderSel = null, isfInputsEl = null, isfErrEl = null;
+
+// Pick an ISF shader (put it on a layer's "isf" generator) and tune its inputs.
+function buildIsf() {
+  const sec = el("div", "group matrix isfpanel");
+  const h = el("h2", null, "ISF shaders");
+  h.onclick = (e) => { if (e.target === h) sec.classList.toggle("collapsed"); };
+  sec.appendChild(h);
+  sec.appendChild(el("div", "hint",
+    "Drop ISF .fs files into the isf/ folder (Rescan in the media browser), set a layer's Generator to \"isf\", then pick a shader. Inputs below are live + modulatable. Some isf.video shaders need GL3/multi-pass and may not compile on GLES2."));
+
+  const row = el("div", "row");
+  row.appendChild(el("div", "name", "Shader"));
+  const sel = el("select");
+  sel.onchange = () => { sendRaw("isf.shader", parseInt(sel.value, 10)); paramValues.set("isf.shader", { value: parseInt(sel.value, 10), norm: 0 }); };
+  isfShaderSel = sel;
+  renderIsfShaders();
+  const mid = el("div"); mid.appendChild(sel); row.appendChild(mid); row.appendChild(el("div"));
+  sec.appendChild(row);
+
+  isfErrEl = el("div", "scripterr");
+  sec.appendChild(isfErrEl);
+  isfInputsEl = el("div");
+  sec.appendChild(isfInputsEl);
+  renderIsfInputs();
+  return sec;
+}
+
+function renderIsfShaders() {
+  if (!isfShaderSel) return;
+  isfShaderSel.innerHTML = "";
+  isfShaders.forEach((nm, i) => { const o = el("option", null, nm); o.value = i; isfShaderSel.appendChild(o); });
+  const cur = paramValues.get("isf.shader");
+  if (cur) isfShaderSel.value = Math.round(cur.value);
+}
+
+// Render the selected shader's inputs as labeled sliders bound to the isf.<slot>
+// pool params (so they update live and can be MIDI-mapped / modulated).
+function renderIsfInputs() {
+  if (!isfInputsEl) return;
+  isfInputsEl.innerHTML = "";
+  for (const inp of isfInputs) {
+    const count = inp.kind === "color" ? 4 : inp.kind === "point2D" ? 2 : 1;
+    const suffix = inp.kind === "color" ? [" R", " G", " B", " A"] : inp.kind === "point2D" ? [" X", " Y"] : [""];
+    for (let k = 0; k < count; k++) {
+      const spec = specsByPath.get(`isf.${inp.slot + k}`);
+      if (!spec) continue;
+      isfInputsEl.appendChild(buildRow({ ...spec, name: inp.label + suffix[k] }));
+    }
+  }
+}
+
+function showIsfError(err) {
+  if (!isfErrEl) return;
+  isfErrEl.textContent = err;
+  isfErrEl.classList.toggle("on", !!err);
+}
+
 // --- MIDI / OSC mapping list ---
 
 function buildMappings() {
@@ -1203,6 +1269,8 @@ function applyChange(c) {
   if (/^post\..*\.(enable|order)$/.test(c.path)) refreshFx();
   // An LFO enable arriving updates the LFO rack.
   if (/^lfo\.\d+\.enable$/.test(c.path)) refreshLfos();
+  // Keep the ISF shader dropdown in sync (e.g. from a preset).
+  if (c.path === "isf.shader" && isfShaderSel) isfShaderSel.value = Math.round(c.value || 0);
 }
 
 function applyTelemetry(t) {

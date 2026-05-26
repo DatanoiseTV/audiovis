@@ -193,7 +193,7 @@ impl WindowApp {
             // Generators and simulations share the layer.N.generator index space.
             let mut generators: Vec<String> = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
             generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
-            web.set_schema(&self.engine, generators, pipeline.media_names(), pipeline.mesh_names());
+            web.set_schema(&self.engine, generators, pipeline.media_names(), pipeline.mesh_names(), pipeline.isf_names());
             web.publish_presets(self.presets.list(), &self.current_preset);
             web.publish_text(self.engine.text_slots());
             web.publish_mappings(self.engine.mappings_list());
@@ -288,9 +288,10 @@ impl WindowApp {
                         gfx.pipeline.rescan_media();
                         let names = gfx.pipeline.media_names();
                         let meshes = gfx.pipeline.mesh_names();
-                        tracing::info!("rescanned media: {} file(s), {} mesh(es)", names.len().saturating_sub(1), meshes.len().saturating_sub(1));
+                        let isf = gfx.pipeline.isf_names();
+                        tracing::info!("rescanned: {} media, {} mesh, {} isf", names.len().saturating_sub(1), meshes.len().saturating_sub(1), isf.len().saturating_sub(1));
                         if let Some(web) = &self.web {
-                            web.publish_media(names, meshes);
+                            web.publish_media(names, meshes, isf);
                         }
                     }
                 }
@@ -427,6 +428,13 @@ impl WindowApp {
 
         gfx.pipeline.render(&fc, &self.engine);
         self.engine.end_frame();
+
+        // When an ISF shader (re)loads, publish its inputs + any compile error.
+        if let Some((error, inputs)) = gfx.pipeline.isf_take_dirty() {
+            if let Some(web) = &self.web {
+                web.publish_isf_inputs(inputs, &error);
+            }
+        }
 
         // Stream a downscaled live preview to the web monitor at ~10 fps.
         if self.frame % 6 == 0 {

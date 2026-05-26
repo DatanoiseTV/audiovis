@@ -47,6 +47,7 @@ struct Snapshot {
     midi_port: String,
     scripts: Vec<String>,
     meshes: Vec<String>,
+    isf_shaders: Vec<String>,
 }
 
 /// Shared between the server tasks and the publisher.
@@ -82,7 +83,7 @@ impl WebHandle {
 
     /// Publish the parameter schema and the generator names once, after the
     /// pipeline has registered everything. Also seeds the initial value set.
-    pub fn set_schema(&self, engine: &Engine, generators: Vec<String>, media: Vec<String>, meshes: Vec<String>) {
+    pub fn set_schema(&self, engine: &Engine, generators: Vec<String>, media: Vec<String>, meshes: Vec<String>, isf_shaders: Vec<String>) {
         let mut schema = Vec::new();
         let mut values = HashMap::new();
         for (id, spec, value) in engine.params().iter() {
@@ -110,7 +111,7 @@ impl WebHandle {
                 },
             );
         }
-        let (schema_c, generators_c, changes_c, media_c, meshes_c);
+        let (schema_c, generators_c, changes_c, media_c, meshes_c, isf_c);
         let mod_sources: Vec<String> = crate::params::MOD_SOURCES.iter().map(|s| s.to_string()).collect();
         let sources_c;
         if let Ok(mut s) = self.snapshot.write() {
@@ -120,12 +121,14 @@ impl WebHandle {
             s.mod_sources = mod_sources;
             s.media = media;
             s.meshes = meshes;
+            s.isf_shaders = isf_shaders;
             schema_c = s.schema.clone();
             generators_c = s.generators.clone();
             changes_c = s.values.values().cloned().collect();
             sources_c = s.mod_sources.clone();
             media_c = s.media.clone();
             meshes_c = s.meshes.clone();
+            isf_c = s.isf_shaders.clone();
         } else {
             return;
         }
@@ -138,6 +141,8 @@ impl WebHandle {
             mod_sources: sources_c,
             media: media_c,
             meshes: meshes_c,
+            isf_shaders: isf_c,
+            isf_present: true,
             ..Default::default()
         };
         let _ = self.out.send(msg.encode_to_vec());
@@ -176,13 +181,27 @@ impl WebHandle {
         let _ = self.out.send(msg.encode_to_vec());
     }
 
-    /// Publish the media + mesh file labels (after a rescan picks up new files).
-    pub fn publish_media(&self, media: Vec<String>, meshes: Vec<String>) {
+    /// Publish the media + mesh + ISF file labels (after a rescan).
+    pub fn publish_media(&self, media: Vec<String>, meshes: Vec<String>, isf_shaders: Vec<String>) {
         if let Ok(mut s) = self.snapshot.write() {
             s.media = media.clone();
             s.meshes = meshes.clone();
+            s.isf_shaders = isf_shaders.clone();
         }
-        let msg = proto::ServerMsg { media, meshes, ..Default::default() };
+        let msg = proto::ServerMsg { media, meshes, isf_shaders, isf_present: true, ..Default::default() };
+        let _ = self.out.send(msg.encode_to_vec());
+    }
+
+    /// Publish the selected ISF shader's inputs + any compile error.
+    pub fn publish_isf_inputs(&self, inputs: Vec<(String, String, usize)>, error: &str) {
+        let isf_inputs: Vec<proto::IsfInput> =
+            inputs.into_iter().map(|(label, kind, slot)| proto::IsfInput { label, kind, slot: slot as i32 }).collect();
+        let msg = proto::ServerMsg {
+            isf_inputs,
+            isf_inputs_present: true,
+            isf_error: error.to_string(),
+            ..Default::default()
+        };
         let _ = self.out.send(msg.encode_to_vec());
     }
 

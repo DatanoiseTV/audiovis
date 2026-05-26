@@ -95,6 +95,20 @@ message ServerMsg {
   bool script_error_present = 24;
   // Mesh file labels for the wireframe generator's mesh dropdown (0 = shapes).
   repeated string meshes = 25;
+  // ISF: available shader names (index 0 = off), the selected shader's inputs
+  // (mapped onto the isf.<slot> param pool) and the last compile error.
+  repeated string isf_shaders = 26;
+  bool isf_present = 27;
+  repeated IsfInput isf_inputs = 28;
+  bool isf_inputs_present = 29;
+  string isf_error = 30;
+}
+
+// One ISF shader input, bound to the parameter pool starting at `slot`.
+message IsfInput {
+  string label = 1;
+  string kind = 2;  // float / bool / long / color / point2D / event
+  int32 slot = 3;
 }
 
 // --- Client -> server ---

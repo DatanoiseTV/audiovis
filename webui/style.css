@@ -432,6 +432,8 @@ select, input[type=text] { padding: 4px 6px; font-size: 12px; }
    ============================================================ */
 .scriptpanel { border-color: rgba(140, 120, 255, 0.32); }
 .scriptpanel h2 { color: #b3a8ff; }
+.isfpanel { border-color: rgba(255, 179, 71, 0.3); }
+.isfpanel h2 { color: var(--amber); }
 .scripted {
   width: 100%; min-height: 200px; resize: vertical;
   background: #0a0a12; color: #d7d7e0; border: 1px solid var(--line2); border-radius: 6px;
