@@ -82,6 +82,19 @@ The wireframe generator morphs procedural solids, or **loads OBJ models** from a
 `meshes/` folder and draws them as rotating, hue-tinted wireframes — pick a mesh
 from the dropdown, drop your own `.obj` in and Rescan.
 
+## ISF shaders
+
+Loads **ISF** ([interactive shader format](https://isf.video/)) `.fs` files from
+an `isf/` folder and runs them as a generator — single- or multi-pass with
+persistent feedback buffers. The JSON header is parsed and its `INPUTS`
+(float / bool / long / color / point2D) become live, modulatable parameters; the
+ISF conventions (`RENDERSIZE`, `TIME`, `IMG_PIXEL`, …) are mapped onto the
+engine's GLSL. Compile errors are surfaced in the web UI. Note that shaders
+relying on GL3-only features, derivatives or custom buffer sizes may not compile
+on real GLES2 hardware (they're fine on the desktop backend).
+
+![ISF shader](docs/img/isf.png)
+
 ## Media layers
 
 Two extra layers load your own **images (PNG/JPG)** or **SVG** from a `media/`
