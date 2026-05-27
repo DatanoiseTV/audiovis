@@ -1,6 +1,6 @@
 [package]
 name = "audiovis"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.82"
 description = "Live audio-reactive VJ visualizer with VHS / analog-video aesthetics, controllable over MIDI, OSC and a web UI"
@@ -70,6 +70,20 @@ resvg = { version = "0.44", default-features = false }
 nokhwa = { version = "0.10", features = ["input-native"], optional = true }
 boa_engine = { version = "0.20", optional = true }
 rusty_link = { version = "0.4.9", optional = true }
+
+# Linux-only: the DRM/KMS direct-to-display backend (`--backend drm`). It opens
+# the DRI device (`/dev/dri/cardN`), allocates scanout buffers with GBM, and
+# brings up a hardware GLES2 context on them via EGL - so the full shader / 3D
+# pipeline renders on the GPU, with no X11/Wayland. Needs system libdrm + libgbm
+# + an EGL/GLES driver at build/run time, which every Pi OS and Linux desktop
+# ships. `gbm`'s `drm-support` feature wires its buffers into the `drm` crate;
+# wayland import is dropped since we only scan out, never import client buffers.
+# `drm` is pinned to the same major as `gbm`'s `drm-support` (0.14) so a single
+# `drm` crate is shared and GBM buffers satisfy `add_framebuffer`'s trait bound.
+[target.'cfg(target_os = "linux")'.dependencies]
+drm = "0.14"
+gbm = { version = "0.18", default-features = false, features = ["drm-support"] }
+libc = "0.2"
 
 [build-dependencies]
 # Pure-Rust protobuf compilation: no system `protoc` needed.

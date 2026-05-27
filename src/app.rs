@@ -61,9 +61,15 @@ pub fn run(cli: Cli, engine: Engine, bus: ControlBus) -> Result<()> {
     match resolve(cli.backend) {
         Backend::Window | Backend::Auto => backend::window::run(cli, engine, bus, audio, midi, video, web),
         Backend::Drm => {
-            // Wired up in the Linux DRM/KMS milestone; until then, be explicit
-            // rather than silently falling back.
-            anyhow::bail!("the drm backend is not yet built; use --backend window")
+            #[cfg(target_os = "linux")]
+            {
+                backend::drm::run(cli, engine, bus, audio, midi, video, web)
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = (audio, midi, video, web, engine, bus, cli);
+                anyhow::bail!("the drm backend is Linux-only; use --backend window")
+            }
         }
     }
 }

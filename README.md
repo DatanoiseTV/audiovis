@@ -162,11 +162,21 @@ cargo build --release        # self-contained binary (web UI + assets embedded)
 # leanest binary for tiny ARM (drops the embedded JS scripting runtime):
 cargo build --release --no-default-features
 
-# headless on a Pi / C.H.I.P., straight to the framebuffer:
+# headless on a Pi / C.H.I.P., straight to the display via DRM/KMS:
 audiovis --backend drm --width 1280 --height 720 --render-scale 0.5 --fps 30
 ```
 
 `audiovis --help` lists every option; each has an `AV_*` environment equivalent.
+
+The `drm` backend renders on the GPU through the DRI device — it opens
+`/dev/dri/cardN`, allocates scanout buffers with GBM and brings up a hardware
+GLES2 context on them via EGL, so the full shader / 3D pipeline runs accelerated
+with no display server. It needs to be **DRM master**: run it from a bare
+console (not inside X11/Wayland), on the active VT, with access to the DRI
+device (the `video`/`render` groups, or root). Pin a specific card with
+`AV_DRM_CARD=/dev/dri/card1` if the autodetected one is the wrong GPU. It picks
+the first connected output's preferred mode and paces frames to the panel's
+vblank via page flips.
 
 ## How it works
 
