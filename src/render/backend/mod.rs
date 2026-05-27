@@ -3,7 +3,11 @@
 //! - [`window`] - desktop window via winit + glutin (macOS, Linux desktop).
 //! - `drm` - Linux direct framebuffer via DRM/KMS + GBM + EGL (added in a later
 //!   milestone, compiled only on Linux).
+//!
+//! The backend-agnostic frame loop (control input, modulation, scripting, web
+//! state) lives in [`driver`]; each backend only adds its GL context + present.
 
+pub mod driver;
 pub mod window;
 
 /// Save an RGBA8 buffer (GL bottom-up order) as a binary PPM (P6), flipping it
