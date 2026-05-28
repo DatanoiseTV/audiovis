@@ -119,11 +119,14 @@ impl Program {
     }
 
     fn loc(&self, name: &str) -> Option<glow::UniformLocation> {
+        // `glow::UniformLocation` is `Copy` on native GL (a small handle) but
+        // `WebGlUniformLocation` (a JS object handle) on the WebGL backend,
+        // which is `Clone` only - so explicitly clone in both code paths.
         if let Some(cached) = self.locs.borrow().get(name) {
-            return *cached;
+            return cached.clone();
         }
         let loc = unsafe { self.gl.get_uniform_location(self.prog, name) };
-        self.locs.borrow_mut().insert(name.to_string(), loc);
+        self.locs.borrow_mut().insert(name.to_string(), loc.clone());
         loc
     }
 

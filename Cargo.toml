@@ -1,9 +1,16 @@
 [workspace]
 # The repo is a workspace so the platform-independent render core can also be
-# built for wasm without dragging in the bin's native-only deps. The root crate
-# is itself a workspace member (the desktop / DRM binary); future wasm crate
-# will land alongside `render-core`.
-members = [".", "crates/render-core"]
+# built for wasm without dragging in the bin's native-only deps. Members:
+#  - "."                   the desktop / DRM binary (this crate)
+#  - "crates/render-core"  shared GL pipeline, generators, FX (lib)
+#  - "crates/audiovis-wasm" wasm-bindgen wrapper that runs render-core in a
+#                           browser WebGL1 context (cdylib)
+members = [".", "crates/render-core", "crates/audiovis-wasm"]
+# The wasm crate has its own native-incompatible deps (wasm-bindgen, web-sys);
+# exclude it from `cargo build` at the workspace root so the desktop build does
+# not try to compile it. It is still built explicitly via:
+#   cargo build --target wasm32-unknown-unknown -p audiovis-wasm
+default-members = [".", "crates/render-core"]
 
 [package]
 name = "audiovis"

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>audiovis wasm renderer spike</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0b10; color: #ddd; font: 13px/1.35 ui-monospace, SF Mono, Menlo, monospace; }
+  #stage { display: grid; grid-template-rows: 1fr auto; height: 100%; }
+  #cv { width: 100%; height: 100%; display: block; background: #000; }
+  #panel { padding: 10px 14px; background: #14141b; border-top: 1px solid #2a2a35; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 18px; align-items: center; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #aaa; }
+  label > b { color: #eee; font-weight: 600; font-size: 12px; }
+  select, input[type="range"] { width: 100%; }
+  #fps { font-variant-numeric: tabular-nums; color: #8fd; }
+  #err { grid-column: 1 / -1; color: #f88; white-space: pre-wrap; }
+  .row { display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="panel">
+    <label><b>Generator</b><select id="gen"></select></label>
+    <label><b>speed <span class="v" id="vspeed">1.00</span></b><input id="speed" type="range" min="0" max="4" step="0.01" value="1"></label>
+    <label><b>scale <span class="v" id="vscale">1.00</span></b><input id="scale" type="range" min="0.1" max="4" step="0.01" value="1"></label>
+    <label><b>warp <span class="v" id="vwarp">0.00</span></b><input id="warp" type="range" min="0" max="1" step="0.01" value="0"></label>
+    <label><b>hue <span class="v" id="vhue">0.00</span></b><input id="hue" type="range" min="0" max="1" step="0.01" value="0"></label>
+    <label><b>p1 <span class="v" id="vp1">0.50</span></b><input id="p1" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+    <label><b>p2 <span class="v" id="vp2">0.50</span></b><input id="p2" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+    <label><b>low <span class="v" id="vlow">0.00</span></b><input id="low" type="range" min="0" max="1" step="0.01" value="0"></label>
+    <label><b>mid <span class="v" id="vmid">0.00</span></b><input id="mid" type="range" min="0" max="1" step="0.01" value="0"></label>
+    <label><b>high <span class="v" id="vhigh">0.00</span></b><input id="high" type="range" min="0" max="1" step="0.01" value="0"></label>
+    <label><b>beat (click canvas)</b><div class="row"><div id="fps">fps —</div></div></label>
+    <div id="err"></div>
+  </div>
+</div>
+
+<script type="module">
+  // Spike for the wasm renderer: loads `audiovis-wasm` via wasm-bindgen, runs a
+  // single generator from sliders. No host websocket yet - that lands once this
+  // proves the glow->WebGL1 path renders the existing shaders unchanged.
+
+  import init, { Renderer } from "./wasm-pkg/audiovis_wasm.js";
+
+  const cv = document.getElementById("cv");
+  const errBox = document.getElementById("err");
+  const sel = document.getElementById("gen");
+  const fpsLabel = document.getElementById("fps");
+
+  function fail(msg) {
+    errBox.textContent = String(msg);
+    console.error(msg);
+  }
+
+  // Match the canvas backing store to its CSS pixel size (device pixel ratio).
+  function fitCanvas() {
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    const rect = cv.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(rect.width * dpr));
+    const h = Math.max(1, Math.floor(rect.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    return [w, h];
+  }
+
+  // A short envelope on canvas click so beat pulses look like a real onset.
+  let beat = 0;
+  cv.addEventListener("pointerdown", () => { beat = 1; });
+
+  // Mirror the slider value into its `.v` readout.
+  const knobs = ["speed", "scale", "warp", "hue", "p1", "p2", "low", "mid", "high"];
+  const knob = {};
+  for (const k of knobs) {
+    knob[k] = document.getElementById(k);
+    const label = document.getElementById("v" + k);
+    knob[k].addEventListener("input", () => label.textContent = (+knob[k].value).toFixed(2));
+  }
+
+  try {
+    // wasm-bindgen `init` resolves the .wasm path off its own URL, so this
+    // works whichever directory the static server roots at.
+    await init();
+    const r = new Renderer(cv);
+
+    // Fill the generator dropdown.
+    const count = r.generator_count();
+    for (let i = 0; i < count; i++) {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = r.generator_name(i);
+      sel.appendChild(opt);
+    }
+    // Sensible default: plasma is generator 0 in the catalogue.
+    sel.value = "0";
+
+    let last = performance.now();
+    let frames = 0, accum = 0;
+
+    function frame(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      accum += dt;
+      frames++;
+      if (accum >= 0.5) { fpsLabel.textContent = `${(frames / accum).toFixed(0)} fps`; frames = 0; accum = 0; }
+
+      const [w, h] = fitCanvas();
+      r.resize(w, h);
+      beat = Math.max(0, beat - dt * 4); // ~250 ms decay
+
+      r.render(
+        +sel.value,
+        now / 1000,
+        w, h,
+        +knob.speed.value, +knob.scale.value, +knob.warp.value, +knob.hue.value,
+        +knob.p1.value, +knob.p2.value,
+        +knob.low.value, +knob.mid.value, +knob.high.value,
+        beat,
+      );
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  } catch (e) {
+    fail(e.message || e);
+  }
+</script>
+</body>
+</html>
