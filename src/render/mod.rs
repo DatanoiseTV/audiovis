@@ -1,34 +1,14 @@
-//! Rendering: the GL abstraction, the frame pipeline and the output backends.
+//! Backends + thin native render-side helpers.
 //!
-//! The pipeline is backend-agnostic - it only needs a live `glow` context and a
-//! viewport size. The backends ([`backend::window`] for desktop, and the
-//! Linux-only DRM backend) create that context and drive the frame loop.
+//! The platform-independent render path (pipeline, shaders, banks, engine,
+//! params) lives in the `audiovis-render-core` crate. This module only holds
+//! the host-side backends (window via winit/glutin; Linux DRM) that own the GL
+//! context and drive the frame loop on top of the shared `Pipeline`.
 
 pub mod backend;
-pub mod compositor;
-pub mod generators;
-pub mod gl;
-pub mod isf;
-pub mod media;
-pub mod mesh;
-pub mod pipeline;
-pub mod post;
-pub mod sim;
-pub mod text;
 
-pub use gl::GlslFlavor;
-
-/// Per-frame timing and sizing handed to the pipeline.
-#[derive(Debug, Clone, Copy)]
-pub struct FrameContext {
-    /// Seconds since the engine started.
-    pub time: f32,
-    /// Seconds since the previous frame.
-    pub dt: f32,
-    /// Output width in pixels.
-    pub width: u32,
-    /// Output height in pixels.
-    pub height: u32,
-    /// Monotonic frame counter.
-    pub frame: u64,
-}
+// Re-export the few render-core shapes the backends and other bin modules
+// name often, so the rest of the bin keeps reading as if these still lived
+// here. (Adding a new render-core re-export is a one-liner, not a deep import
+// rewrite at every callsite.)
+pub use audiovis_render_core::{FrameContext, GlslFlavor};

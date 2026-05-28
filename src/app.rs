@@ -8,7 +8,7 @@ use crate::cli::{Backend, Cli};
 use crate::control::midi::MidiInputs;
 use crate::control::osc::OscInput;
 use crate::control::ControlBus;
-use crate::engine::Engine;
+use audiovis_render_core::engine::Engine;
 use crate::render::backend;
 use crate::video::VideoEngine;
 use crate::web::WebHandle;

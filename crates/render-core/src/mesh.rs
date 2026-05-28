@@ -7,12 +7,13 @@
 //! sphere so any model frames sensibly.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::sync::Arc;
 
 use glow::HasContext as _;
 
 use crate::engine::Engine;
 use crate::params::{ParamId, ParamKind, ParamSpec};
+use crate::Resources;
 
 use super::gl::{self, Gl, GlslFlavor, Program};
 
@@ -34,19 +35,20 @@ pub struct MeshBank {
     needs_vao: bool,
     /// `wire.mesh`: 0 = procedural shapes, 1.. = a loaded OBJ.
     mesh_param: ParamId,
-    files: Vec<PathBuf>,
+    files: Vec<String>,
     names: Vec<String>,
     loaded: Option<Loaded>,
     last_src: i64,
+    resources: Arc<dyn Resources>,
 }
 
 impl MeshBank {
-    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine) -> Result<Self, String> {
+    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, resources: Arc<dyn Resources>) -> Result<Self, String> {
         let vert = include_str!("shaders/mesh/wire.vert");
         let frag = include_str!("shaders/mesh/wire.frag");
         let prog = Program::new(gl, flavor, vert, frag).map_err(|e| format!("wire mesh: {e}"))?;
 
-        let (files, names) = scan_mesh_dir();
+        let (files, names) = scan_meshes(&*resources);
         let mesh_param = engine.params_mut().register(ParamSpec::new(
             "wire.mesh",
             "Mesh",
@@ -63,6 +65,7 @@ impl MeshBank {
             names,
             loaded: None,
             last_src: -1,
+            resources,
         })
     }
 
@@ -73,7 +76,7 @@ impl MeshBank {
 
     /// Re-scan the mesh directory for newly added files.
     pub fn rescan(&mut self) {
-        let (files, names) = scan_mesh_dir();
+        let (files, names) = scan_meshes(&*self.resources);
         self.files = files;
         self.names = names;
         self.last_src = -1;
@@ -138,13 +141,20 @@ impl MeshBank {
         if idx == 0 || idx > self.files.len() {
             return; // procedural shapes (handled by the fragment generator)
         }
-        let path = &self.files[idx - 1];
-        match load_obj(path) {
+        let key = self.files[idx - 1].clone();
+        let text = match self.resources.read_mesh(&key) {
+            Some(t) => t,
+            None => {
+                tracing::warn!("wireframe: provider has no '{key}'");
+                return;
+            }
+        };
+        match parse_obj(&text) {
             Some((positions, indices)) if !indices.is_empty() => {
                 self.loaded = Some(self.upload(&positions, &indices));
-                tracing::info!("wireframe: loaded {} ({} edges)", path.display(), indices.len() / 2);
+                tracing::info!("wireframe: loaded {key} ({} edges)", indices.len() / 2);
             }
-            _ => tracing::warn!("wireframe: could not load {}", path.display()),
+            _ => tracing::warn!("wireframe: could not parse {key}"),
         }
     }
 
@@ -175,27 +185,18 @@ impl MeshBank {
     }
 }
 
-/// Find the mesh directory (`AV_MESH_DIR`, default `meshes`) and list OBJ files.
-fn scan_mesh_dir() -> (Vec<PathBuf>, Vec<String>) {
-    let dir = std::env::var("AV_MESH_DIR").unwrap_or_else(|_| "meshes".to_string());
-    let mut files = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("obj")).unwrap_or(false) {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    let mut names = vec!["(shapes)".to_string()];
-    names.extend(files.iter().map(|p| p.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string()));
+/// Ask the resource provider for available OBJ meshes; build dropdown labels
+/// (index 0 = "(shapes)" - the built-in procedural meshes).
+fn scan_meshes(resources: &dyn Resources) -> (Vec<String>, Vec<String>) {
+    let files = resources.mesh_names();
+    let mut names = Vec::with_capacity(files.len() + 1);
+    names.push("(shapes)".to_string());
+    names.extend(files.iter().cloned());
     (files, names)
 }
 
-/// Parse an OBJ file into normalised vertex positions and a unique edge list.
-fn load_obj(path: &std::path::Path) -> Option<(Vec<f32>, Vec<u16>)> {
-    let text = std::fs::read_to_string(path).ok()?;
+/// Parse OBJ text into normalised vertex positions and a unique edge list.
+fn parse_obj(text: &str) -> Option<(Vec<f32>, Vec<u16>)> {
     let mut verts: Vec<[f32; 3]> = Vec::new();
     let mut edges: HashSet<(u16, u16)> = HashSet::new();
 

@@ -26,10 +26,10 @@ use crate::audio::AudioEngine;
 use crate::cli::Cli;
 use crate::control::midi::MidiInputs;
 use crate::control::ControlBus;
-use crate::engine::Engine;
+use audiovis_render_core::engine::Engine;
 use crate::render::backend::driver::Driver;
-use crate::render::gl::{self, Gl};
-use crate::render::pipeline::Pipeline;
+use audiovis_render_core::gl::{self, Gl};
+use audiovis_render_core::pipeline::Pipeline;
 use crate::render::{FrameContext, GlslFlavor};
 use crate::video::VideoEngine;
 use crate::web::WebHandle;
@@ -122,7 +122,9 @@ impl WindowApp {
 
         let size = window.inner_size();
         let (w, h) = (size.width.max(1), size.height.max(1));
-        let pipeline = Pipeline::new(&gl, GlslFlavor::GlCore, &mut self.driver.engine, w, h, self.driver.cli.render_scale)
+        let resources: std::sync::Arc<dyn audiovis_render_core::Resources> =
+            std::sync::Arc::new(crate::resources::DiskResources::new());
+        let pipeline = Pipeline::new(&gl, GlslFlavor::GlCore, &mut self.driver.engine, w, h, self.driver.cli.render_scale, resources)
             .map_err(|e| anyhow!("pipeline init failed: {e}"))?;
 
         // The pipeline has now registered all layer/effect parameters, so the

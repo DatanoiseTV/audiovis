@@ -1,0 +1,29 @@
+[package]
+name = "audiovis-render-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Platform-independent render core for audiovis: pipeline, shaders, generators, sims, FX, mesh, ISF, params, engine. Shared by the native app and the in-browser wasm renderer."
+authors = ["DatanoiseTV"]
+license = "MIT"
+publish = false
+
+[lib]
+# `rlib` for the native bin to link against; `cdylib` is added by the wasm crate
+# that wraps this one - the core itself stays a plain library.
+crate-type = ["rlib"]
+
+[dependencies]
+# Same GL abstraction the native backends already use; `glow` targets WebGL
+# transparently when compiled to wasm32, so the same code drives the browser.
+glow = "0.16"
+# Pure-Rust, wasm-friendly dependencies kept on the core side.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+resvg = { version = "0.44", default-features = false }
+fontdue = "0.9.3"
+font8x8 = "0.3.1"

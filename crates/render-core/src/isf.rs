@@ -13,12 +13,13 @@
 //! the compile error is surfaced rather than failing silently.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde_json::Value;
 
 use crate::engine::Engine;
 use crate::params::{ParamId, ParamKind, ParamSpec};
+use crate::Resources;
 
 use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program, RenderTexture};
 
@@ -74,8 +75,9 @@ pub struct IsfBank {
     shader_param: ParamId,
     /// Parameter pool the inputs map onto (`isf.0` .. `isf.{POOL-1}`).
     pool: Vec<ParamId>,
-    files: Vec<PathBuf>,
+    files: Vec<String>,
     names: Vec<String>,
+    resources: Arc<dyn Resources>,
     compiled: Option<Compiled>,
     last_src: i64,
     /// 1x1 black texture for unbound image inputs.
@@ -89,8 +91,8 @@ pub struct IsfBank {
 }
 
 impl IsfBank {
-    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, width: i32, height: i32) -> Result<Self, String> {
-        let (files, names) = scan_isf_dir();
+    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, width: i32, height: i32, resources: Arc<dyn Resources>) -> Result<Self, String> {
+        let (files, names) = scan_isf(&*resources);
         let store = engine.params_mut();
         let shader_param = store.register(ParamSpec::new(
             "isf.shader",
@@ -116,6 +118,7 @@ impl IsfBank {
             pool,
             files,
             names,
+            resources,
             compiled: None,
             last_src: -1,
             black,
@@ -133,7 +136,7 @@ impl IsfBank {
 
     /// Re-scan the ISF directory.
     pub fn rescan(&mut self) {
-        let (files, names) = scan_isf_dir();
+        let (files, names) = scan_isf(&*self.resources);
         self.files = files;
         self.names = names;
         self.last_src = -1;
@@ -270,11 +273,11 @@ impl IsfBank {
         if idx == 0 || idx > self.files.len() {
             return;
         }
-        let path = self.files[idx - 1].clone();
-        let raw = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(e) => {
-                self.error = Some(format!("read failed: {e}"));
+        let key = self.files[idx - 1].clone();
+        let raw = match self.resources.read_isf(&key) {
+            Some(s) => s,
+            None => {
+                self.error = Some(format!("provider has no '{key}'"));
                 return;
             }
         };
@@ -337,7 +340,7 @@ impl IsfBank {
         }
 
         self.compiled = Some(Compiled { prog, inputs, passes: meta.passes, buffers });
-        tracing::info!("ISF: loaded {}", path.display());
+        tracing::info!("ISF: loaded {key}");
     }
 }
 
@@ -355,26 +358,17 @@ fn kind_tag(k: &InputKind) -> &'static str {
     }
 }
 
-/// Scan the ISF directory (`AV_ISF_DIR`, default `isf`) for shader files.
-fn scan_isf_dir() -> (Vec<PathBuf>, Vec<String>) {
-    let dir = std::env::var("AV_ISF_DIR").unwrap_or_else(|_| "isf".to_string());
-    let mut files = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for e in entries.flatten() {
-            let p = e.path();
-            let ok = p
-                .extension()
-                .and_then(|x| x.to_str())
-                .map(|x| matches!(x.to_ascii_lowercase().as_str(), "fs" | "frag" | "glsl"))
-                .unwrap_or(false);
-            if ok {
-                files.push(p);
-            }
-        }
-    }
-    files.sort();
-    let mut names = vec!["(off)".to_string()];
-    names.extend(files.iter().map(|p| p.file_stem().and_then(|n| n.to_str()).unwrap_or("?").to_string()));
+/// Ask the resource provider for available ISF shaders; build dropdown labels
+/// (index 0 = "(off)").
+fn scan_isf(resources: &dyn Resources) -> (Vec<String>, Vec<String>) {
+    let files = resources.isf_names();
+    let mut names = Vec::with_capacity(files.len() + 1);
+    names.push("(off)".to_string());
+    // Strip the extension on the label so the dropdown shows just the shader
+    // name; the bank still tracks the full key for resource lookups.
+    names.extend(files.iter().map(|f| {
+        f.rsplit_once('.').map(|(stem, _)| stem.to_string()).unwrap_or_else(|| f.clone())
+    }));
     (files, names)
 }
 

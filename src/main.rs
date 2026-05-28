@@ -7,23 +7,24 @@
 mod app;
 mod audio;
 mod cli;
-mod config;
 mod control;
-mod engine;
 mod link;
-mod params;
 mod presets;
 mod render;
+mod resources;
 mod script;
 mod version;
 mod video;
 mod web;
+// `config`, `engine`, `params` live in `audiovis-render-core` so the same
+// render path can be compiled to wasm and run in the browser.
 
 use anyhow::Result;
+use audiovis_render_core::engine::Engine;
+use audiovis_render_core::params;
 use clap::Parser;
 use cli::Cli;
 use control::ControlBus;
-use engine::Engine;
 
 fn main() -> Result<()> {
     let args = Cli::parse();

@@ -1,3 +1,10 @@
+[workspace]
+# The repo is a workspace so the platform-independent render core can also be
+# built for wasm without dragging in the bin's native-only deps. The root crate
+# is itself a workspace member (the desktop / DRM binary); future wasm crate
+# will land alongside `render-core`.
+members = [".", "crates/render-core"]
+
 [package]
 name = "audiovis"
 version = "0.7.0"
@@ -25,6 +32,10 @@ script = ["dep:boa_engine"]
 link = ["dep:rusty_link"]
 
 [dependencies]
+# The platform-independent render path lives in its own crate so the same code
+# can also be compiled to wasm and run in the browser. The bin pulls in the
+# native-only deps (window, audio, MIDI, OSC, web server, DRM) around it.
+audiovis-render-core = { version = "0.1", path = "crates/render-core" }
 anyhow = "1"
 thiserror = "2"
 clap = { version = "4", features = ["derive", "env"] }

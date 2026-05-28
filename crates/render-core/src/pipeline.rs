@@ -5,7 +5,7 @@
 //! scale = fewer pixels shaded, the main lever for weak GPUs). The analog and
 //! glitch post chains attach inside the compositor in later milestones.
 
-use crate::audio::WAVE;
+use crate::WAVE;
 use crate::engine::Engine;
 
 use super::compositor::Compositor;
@@ -46,16 +46,17 @@ impl Pipeline {
         width: u32,
         height: u32,
         render_scale: f32,
+        resources: std::sync::Arc<dyn crate::Resources>,
     ) -> Result<Self, String> {
         let quad = FullscreenQuad::new(gl, flavor)?;
         let scale = render_scale.clamp(0.1, 1.0);
         let (iw, ih) = internal_size(width, height, scale);
-        let mut compositor = Compositor::new(gl, flavor, engine, iw, ih)?;
+        let mut compositor = Compositor::new(gl, flavor, engine, iw, ih, resources)?;
         let post = PostChain::new(gl, flavor, engine, iw, ih)?;
         let text = TextOverlay::new(gl, flavor)?;
         let wave_tex = gl::make_texture(gl, WAVE as i32, 1, None, false);
         compositor.set_wave_tex(wave_tex);
-        let script_tex = gl::make_texture(gl, crate::script::SCRIPT_W as i32, crate::script::SCRIPT_H as i32, None, true);
+        let script_tex = gl::make_texture(gl, crate::SCRIPT_W as i32, crate::SCRIPT_H as i32, None, true);
         compositor.set_script_tex(script_tex);
         let camera_tex = gl::make_texture(gl, 1, 1, Some(&[0, 0, 0, 255]), false);
         compositor.set_camera_tex(camera_tex);
@@ -110,7 +111,7 @@ impl Pipeline {
     /// Upload the JS script's RGBA pixel buffer (SCRIPT_W x SCRIPT_H) for the
     /// script generator to display.
     pub fn set_script_buffer(&self, rgba: &[u8]) {
-        gl::update_texture(&self.gl, self.script_tex, crate::script::SCRIPT_W as i32, crate::script::SCRIPT_H as i32, rgba);
+        gl::update_texture(&self.gl, self.script_tex, crate::SCRIPT_W as i32, crate::SCRIPT_H as i32, rgba);
     }
 
     /// Upload a camera frame (RGBA, top-down) for the camera generator.

@@ -184,6 +184,7 @@ name = "audiovis"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "audiovis-render-core",
  "axum",
  "boa_engine",
  "clap",
@@ -218,6 +219,22 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "winit",
+]
+
+[[package]]
+name = "audiovis-render-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "font8x8",
+ "fontdue",
+ "glow",
+ "image",
+ "resvg",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]

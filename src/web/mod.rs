@@ -24,8 +24,8 @@ use prost::Message;
 use tokio::sync::broadcast;
 
 use crate::control::ControlEvent;
-use crate::engine::{Engine, EngineNotice};
-use crate::params::{ParamKind, ParamValue};
+use audiovis_render_core::engine::{Engine, EngineNotice};
+use audiovis_render_core::params::{ParamKind, ParamValue};
 
 /// The full current state, so a fresh client can be brought up to date at once.
 #[derive(Default)]
@@ -114,7 +114,7 @@ impl WebHandle {
             );
         }
         let (schema_c, generators_c, changes_c, media_c, meshes_c, isf_c);
-        let mod_sources: Vec<String> = crate::params::MOD_SOURCES.iter().map(|s| s.to_string()).collect();
+        let mod_sources: Vec<String> = audiovis_render_core::params::MOD_SOURCES.iter().map(|s| s.to_string()).collect();
         let sources_c;
         if let Ok(mut s) = self.snapshot.write() {
             s.schema = schema;
@@ -341,7 +341,7 @@ fn client_to_events(msg: proto::ClientMsg) -> Vec<ControlEvent> {
         if learn.clear {
             out.push(ControlEvent::ClearMappingsFor { path: learn.path });
         } else if learn.arm {
-            out.push(ControlEvent::Arm { path: learn.path, mode: crate::params::MapMode::Absolute });
+            out.push(ControlEvent::Arm { path: learn.path, mode: audiovis_render_core::params::MapMode::Absolute });
         } else {
             out.push(ControlEvent::Disarm);
         }

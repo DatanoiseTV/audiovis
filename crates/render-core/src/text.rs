@@ -19,9 +19,9 @@ const TTF_ATLAS: i32 = TTF_CELL * 16; // 256
 /// Real pixel typefaces (OFL), rasterized into atlases at startup, with the
 /// raster px size tuned to each face's design size.
 const TTF_FONTS: &[(&[u8], f32)] = &[
-    (include_bytes!("../../assets/fonts/vt323.ttf"), 16.0),
-    (include_bytes!("../../assets/fonts/silkscreen.ttf"), 11.0),
-    (include_bytes!("../../assets/fonts/pressstart.ttf"), 10.0),
+    (include_bytes!("../../../assets/fonts/vt323.ttf"), 16.0),
+    (include_bytes!("../../../assets/fonts/silkscreen.ttf"), 11.0),
+    (include_bytes!("../../../assets/fonts/pressstart.ttf"), 10.0),
 ];
 
 /// Font styles, selected by the `text.font` param. Names mirror the UI dropdown.

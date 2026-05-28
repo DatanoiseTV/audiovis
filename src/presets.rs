@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use crate::config::Preset;
+use audiovis_render_core::config::Preset;
 
 /// Curated presets shipped inside the binary.
 #[derive(rust_embed::RustEmbed)]

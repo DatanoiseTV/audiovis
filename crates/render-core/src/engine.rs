@@ -12,7 +12,7 @@ use std::time::Instant;
 use std::collections::HashMap;
 
 use crate::config::Preset;
-use crate::control::{ControlEvent, Transport};
+use crate::events::{ControlEvent, Transport};
 use crate::params::{MapAction, Mapping, ModMatrix, ParamKind, ParamStore, ParamValue, SourceKey};
 
 /// Musical cycle lengths in beats, used by the tempo-synced LFOs. Every value

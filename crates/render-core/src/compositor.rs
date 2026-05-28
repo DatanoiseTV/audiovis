@@ -74,12 +74,12 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, width: i32, height: i32) -> Result<Self, String> {
+    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, width: i32, height: i32, resources: std::sync::Arc<dyn crate::Resources>) -> Result<Self, String> {
         let bank = GeneratorBank::new(gl, flavor)?;
         let sim_bank = SimBank::new(gl, flavor)?;
-        let media = MediaBank::new(gl, flavor, engine)?;
-        let mesh = MeshBank::new(gl, flavor, engine)?;
-        let isf = IsfBank::new(gl, flavor, engine, width, height)?;
+        let media = MediaBank::new(gl, flavor, engine, resources.clone())?;
+        let mesh = MeshBank::new(gl, flavor, engine, resources.clone())?;
+        let isf = IsfBank::new(gl, flavor, engine, width, height, resources)?;
         // Generators and simulations share one index space.
         let gen_max = (bank.len() + sim_bank.len()).saturating_sub(1) as i64;
 

@@ -129,7 +129,7 @@ mod imp {
     use boa_engine::{js_string, Context, JsValue, NativeFunction, Source};
 
     use super::{ScriptAction, ScriptOutcome, ScriptSignals, SCRIPT_H, SCRIPT_W};
-    use crate::params::ParamStore;
+    use audiovis_render_core::params::ParamStore;
 
     /// Shared between the engine and the native functions on the render thread.
     #[derive(Default)]
@@ -415,7 +415,7 @@ mod imp {
 #[cfg(not(feature = "script"))]
 mod stub {
     use super::{ScriptOutcome, ScriptSignals};
-    use crate::params::ParamStore;
+    use audiovis_render_core::params::ParamStore;
 
     #[derive(Default)]
     pub struct ScriptEngine;

@@ -15,11 +15,11 @@ use crate::audio::{AudioEngine, AudioShared};
 use crate::cli::Cli;
 use crate::control::midi::MidiInputs;
 use crate::control::{ControlBus, ControlEvent};
-use crate::engine::{Engine, LFO_DIVISIONS};
+use audiovis_render_core::engine::{Engine, LFO_DIVISIONS};
 use crate::link::LinkEngine;
-use crate::params::ParamValue;
+use audiovis_render_core::params::ParamValue;
 use crate::presets::PresetStore;
-use crate::render::pipeline::Pipeline;
+use audiovis_render_core::pipeline::Pipeline;
 use crate::script::{ScriptAction, ScriptEngine, ScriptSignals, ScriptStore};
 use crate::video::{VideoEngine, VideoShared};
 use crate::web::WebHandle;
@@ -142,8 +142,8 @@ impl Driver {
 
         if let Some(web) = &self.web {
             // Generators and simulations share the layer.N.generator index space.
-            let mut generators: Vec<String> = crate::render::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
-            generators.extend(crate::render::sim::SIMS.iter().map(|s| s.name.to_string()));
+            let mut generators: Vec<String> = audiovis_render_core::generators::GENERATORS.iter().map(|g| g.name.to_string()).collect();
+            generators.extend(audiovis_render_core::sim::SIMS.iter().map(|s| s.name.to_string()));
             web.set_schema(&self.engine, generators, pipeline.media_names(), pipeline.mesh_names(), pipeline.isf_names());
             web.publish_presets(self.presets.list(), &self.current_preset);
             web.publish_text(self.engine.text_slots());
@@ -404,7 +404,7 @@ impl Driver {
                 let mut jpeg = Vec::new();
                 let enc = jpeg_encoder::Encoder::new(&mut jpeg, 55);
                 if enc
-                    .encode(&rgba, crate::render::pipeline::PREVIEW_W as u16, crate::render::pipeline::PREVIEW_H as u16, jpeg_encoder::ColorType::Rgba)
+                    .encode(&rgba, audiovis_render_core::pipeline::PREVIEW_W as u16, audiovis_render_core::pipeline::PREVIEW_H as u16, jpeg_encoder::ColorType::Rgba)
                     .is_ok()
                 {
                     web.publish_preview(jpeg);

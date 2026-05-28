@@ -6,10 +6,11 @@
 //! brightness, and blends with the usual mode set. SVGs are rasterised once on
 //! load; rasters are decoded once - there is no per-frame decode cost.
 
-use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::engine::Engine;
 use crate::params::{ParamId, ParamKind, ParamSpec};
+use crate::Resources;
 
 use super::gl::{self, FullscreenQuad, Gl, GlslFlavor, PingPong, Program};
 
@@ -50,19 +51,22 @@ pub struct MediaBank {
     gl: Gl,
     prog: Program,
     layers: Vec<MediaLayer>,
-    /// Files discovered in the media directory (parallel to `names[1..]`).
-    files: Vec<PathBuf>,
+    /// Resource keys discovered (parallel to `names[1..]`). Looked up against
+    /// the [`Resources`] provider when a layer's source index changes.
+    files: Vec<String>,
     /// Dropdown labels for the source param: index 0 is "(none)".
     names: Vec<String>,
     /// Currently loaded texture per layer, if any.
     loaded: Vec<Option<Loaded>>,
     /// Last source index per layer, to detect a change and (re)load.
     last_src: Vec<i64>,
+    /// Shared resource provider used to load files lazily on selection.
+    resources: Arc<dyn Resources>,
 }
 
 impl MediaBank {
-    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine) -> Result<Self, String> {
-        let (files, names) = scan_media_dir();
+    pub fn new(gl: &Gl, flavor: GlslFlavor, engine: &mut Engine, resources: Arc<dyn Resources>) -> Result<Self, String> {
+        let (files, names) = scan_media(&*resources);
 
         // Register the per-layer control surface.
         let mut layers = Vec::with_capacity(NUM_MEDIA);
@@ -109,6 +113,7 @@ impl MediaBank {
             names,
             loaded: (0..NUM_MEDIA).map(|_| None).collect(),
             last_src: vec![-1; NUM_MEDIA],
+            resources,
         })
     }
 
@@ -121,7 +126,7 @@ impl MediaBank {
     /// layers keep their current texture; `last_src` is reset so a re-selection
     /// reloads against the new file list.
     pub fn rescan(&mut self) {
-        let (files, names) = scan_media_dir();
+        let (files, names) = scan_media(&*self.resources);
         self.files = files;
         self.names = names;
         self.last_src = vec![-1; NUM_MEDIA];
@@ -170,53 +175,48 @@ impl MediaBank {
             self.loaded[layer] = None;
             return;
         }
-        let path = &self.files[idx - 1];
-        match decode(path) {
+        let key = self.files[idx - 1].clone();
+        let bytes = match self.resources.read_media(&key) {
+            Some(b) => b,
+            None => {
+                tracing::warn!("media {layer}: provider has no '{key}'");
+                self.loaded[layer] = None;
+                return;
+            }
+        };
+        match decode(&bytes, &key) {
             Some((rgba, w, h)) => {
                 let tex = gl::make_texture(&self.gl, w as i32, h as i32, Some(&rgba), false);
                 let aspect = w as f32 / h.max(1) as f32;
                 self.loaded[layer] = Some(Loaded { tex, aspect });
-                tracing::info!("media {layer}: loaded {} ({w}x{h})", path.display());
+                tracing::info!("media {layer}: loaded {key} ({w}x{h})");
             }
             None => {
-                tracing::warn!("media {layer}: could not load {}", path.display());
+                tracing::warn!("media {layer}: could not decode {key}");
                 self.loaded[layer] = None;
             }
         }
     }
 }
 
-/// Find the media directory (`AV_MEDIA_DIR`, default `media`) and list the
-/// supported files in it, sorted by name. Returns (paths, dropdown labels).
-fn scan_media_dir() -> (Vec<PathBuf>, Vec<String>) {
-    let dir = std::env::var("AV_MEDIA_DIR").unwrap_or_else(|_| "media".to_string());
-    let mut files = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let ok = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "svg"))
-                .unwrap_or(false);
-            if ok {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    let mut names = vec!["(none)".to_string()];
-    names.extend(files.iter().map(|p| p.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string()));
+/// Ask the resource provider for the available media files and build the
+/// dropdown label list (index 0 = "(none)").
+fn scan_media(resources: &dyn Resources) -> (Vec<String>, Vec<String>) {
+    let files = resources.media_names();
+    let mut names = Vec::with_capacity(files.len() + 1);
+    names.push("(none)".to_string());
+    names.extend(files.iter().cloned());
     (files, names)
 }
 
-/// Decode an image or SVG file to straight-alpha RGBA8 bytes.
-fn decode(path: &std::path::Path) -> Option<(Vec<u8>, u32, u32)> {
-    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+/// Decode an image or SVG buffer to straight-alpha RGBA8 bytes. `name` supplies
+/// the extension so we know which decoder to use.
+fn decode(data: &[u8], name: &str) -> Option<(Vec<u8>, u32, u32)> {
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
     if ext == "svg" {
-        decode_svg(path)
+        decode_svg(data)
     } else {
-        let img = image::open(path).ok()?.to_rgba8();
+        let img = image::load_from_memory(data).ok()?.to_rgba8();
         let (w, h) = img.dimensions();
         Some((img.into_raw(), w, h))
     }
@@ -224,12 +224,11 @@ fn decode(path: &std::path::Path) -> Option<(Vec<u8>, u32, u32)> {
 
 /// Rasterise an SVG at a resolution that keeps its longest side near
 /// `SVG_MAX_SIDE`, then un-premultiply tiny-skia's output to straight alpha.
-fn decode_svg(path: &std::path::Path) -> Option<(Vec<u8>, u32, u32)> {
+fn decode_svg(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     use resvg::tiny_skia;
     use resvg::usvg;
 
-    let data = std::fs::read(path).ok()?;
-    let tree = usvg::Tree::from_data(&data, &usvg::Options::default()).ok()?;
+    let tree = usvg::Tree::from_data(data, &usvg::Options::default()).ok()?;
     let size = tree.size();
     let longest = size.width().max(size.height()).max(1.0);
     let scale = (SVG_MAX_SIDE / longest).clamp(0.1, 8.0);
