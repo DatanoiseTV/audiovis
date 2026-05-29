@@ -31,6 +31,12 @@ pub struct Cli {
     #[arg(long, env = "AV_FPS", default_value_t = 60)]
     pub fps: u32,
 
+    /// Frames per second for the downscaled live preview streamed to the web UI
+    /// (JPEG over websocket). 24 keeps the monitor close to real-time without
+    /// flooding the network or hammering JPEG encode on weak ARM. 0 disables it.
+    #[arg(long, env = "AV_PREVIEW_FPS", default_value_t = 24.0)]
+    pub preview_fps: f32,
+
     /// Audio input device name. Empty selects the system default.
     #[arg(long, env = "AV_AUDIO_DEVICE", default_value = "")]
     pub audio_device: String,

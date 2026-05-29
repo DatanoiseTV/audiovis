@@ -56,6 +56,10 @@ pub struct Driver {
     wave_buf: Vec<f32>,
     start: Instant,
     last: Instant,
+    /// Wall-clock time the last live preview JPEG was published. Drives a
+    /// time-based gate so the preview rate stays steady even if the render
+    /// loop is slowed by load, instead of being a 60-fps multiple.
+    last_preview: Instant,
     frame: u64,
     max_frames: Option<u64>,
 }
@@ -104,6 +108,11 @@ impl Driver {
             wave_buf: Vec::new(),
             start: Instant::now(),
             last: Instant::now(),
+            // Seed in the past so the very first frame publishes a preview
+            // instead of waiting one period before the web monitor lights up.
+            last_preview: Instant::now()
+                .checked_sub(std::time::Duration::from_secs(1))
+                .unwrap_or_else(Instant::now),
             frame: 0,
             max_frames,
         }
@@ -397,9 +406,16 @@ impl Driver {
             }
         }
 
-        // Stream a downscaled live preview to the web monitor at ~10 fps.
-        if self.frame % 6 == 0 {
-            if let Some(web) = &self.web {
+        // Stream a downscaled live preview to the web monitor. The rate is
+        // wall-clock based (driven by --preview-fps, default 24) rather than a
+        // multiple of the render fps, so the monitor stays steady when the
+        // render loop slows under load. `preview_fps <= 0` disables it.
+        let target_fps = self.cli.preview_fps;
+        if target_fps > 0.0 && self.web.is_some() {
+            let period = std::time::Duration::from_secs_f32(1.0 / target_fps);
+            if self.last.duration_since(self.last_preview) >= period {
+                self.last_preview = self.last;
+                let web = self.web.as_ref().unwrap();
                 let rgba = pipeline.read_preview();
                 let mut jpeg = Vec::new();
                 let enc = jpeg_encoder::Encoder::new(&mut jpeg, 55);
